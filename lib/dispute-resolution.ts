@@ -1,0 +1,59 @@
+import { supabaseAdmin } from "@/lib/supabase-server";
+import { createA2UPayment } from "@/lib/pi-platform";
+
+/**
+ * Pays out an escrowed hire_request — to the provider (release) or back to
+ * the buyer (refund). Shared by:
+ *   - app/api/hire-requests/[id]/release (buyer self-service)
+ *   - app/api/hire-requests/[id]/refund (buyer/provider self-service)
+ *   - app/api/admin/disputes/[id]/resolve (admin dispute resolution)
+ *
+ * ⚠️ Same CONTRACT SEAM note as the routes that call this: swap the
+ * createA2UPayment() call for a deployed escrow contract's release()/
+ * refund() once the Pi client SDK exposes contract invocation.
+ */
+export async function payoutHireRequest(params: {
+  hireRequestId: string;
+  favor: "provider" | "buyer";
+  resolvedBy?: string; // admin uid, when this is a dispute resolution
+}) {
+  const { data: hr, error: fetchErr } = await supabaseAdmin
+    .from("hire_requests")
+    .select("id, buyer_uid, provider_uid, amount, status")
+    .eq("id", params.hireRequestId)
+    .single();
+  if (fetchErr || !hr) throw new Error("Hire request not found");
+
+  const recipient = params.favor === "provider" ? hr.provider_uid : hr.buyer_uid;
+  const payment = await createA2UPayment({
+    uid: recipient,
+    amount: hr.amount,
+    memo: `${params.favor === "provider" ? "Release" : "Refund"} for hire request ${hr.id}`,
+    metadata: {
+      hireRequestId: hr.id,
+      kind: params.favor === "provider" ? "escrow_release" : "escrow_refund",
+      resolvedBy: params.resolvedBy ?? null,
+    },
+  });
+
+  const txid = payment.identifier ?? payment.id ?? null;
+  const update: Record<string, unknown> =
+    params.favor === "provider"
+      ? { status: "released", release_txid: txid }
+      : { status: "refunded", refund_txid: txid };
+
+  if (params.resolvedBy) {
+    update.resolved_by = params.resolvedBy;
+    update.resolved_favor = params.favor;
+    update.dispute_stage = "resolved";
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("hire_requests")
+    .update(update)
+    .eq("id", params.hireRequestId)
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return data;
+}
