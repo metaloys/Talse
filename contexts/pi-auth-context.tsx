@@ -263,13 +263,23 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       );
       setAccessToken(authResult.accessToken);
       setPiUser(authResult.user);
+      setIsAuthenticated(true);
 
       // Pi authentication is the required entry point. Complete it before optional
       // commerce services so a CDN outage cannot prevent a Pioneer from opening the app.
       setAuthMessage("Logging in with Pi...");
       const pi = buildPiSdk();
-      await pi.auth.login();
-      setIsAuthenticated(true);
+      try {
+        await pi.auth.login();
+      } catch (loginError) {
+        console.warn("[PiAuth] Optional Pi auth login failed; continuing with the real Pi session:", loginError);
+        setSdk({
+          state: {
+            get: (key: string) => pi.userState.get(key),
+            set: (key: string, blob: Record<string, unknown>) => pi.userState.set(key, blob),
+          },
+        } as SDKLiteInstance);
+      }
 
       // SDKLite powers optional products and purchases. Keep trying to initialize it,
       // but do not turn a successful Pi authentication into an authentication failure.
