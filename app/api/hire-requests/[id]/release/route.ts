@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
-import { payoutHireRequest } from "@/lib/dispute-resolution";
+import { payoutHireRequest, PayoutNotConfiguredError } from "@/lib/dispute-resolution";
 
 /**
  * Buyer confirms delivery -> release escrowed funds to the provider.
@@ -29,6 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ request: data });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
+    if (err instanceof PayoutNotConfiguredError) return NextResponse.json({ error: err.message }, { status: err.status });
     return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
   }
 }

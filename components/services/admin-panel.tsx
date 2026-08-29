@@ -20,7 +20,12 @@ export function AdminPanel({ onExit }: { onExit: () => void }) {
       <p className="mx-auto mt-2 max-w-md text-xs text-muted-foreground">Platform operations workspace</p>
     </header>
     <div className="mx-auto flex max-w-md flex-col gap-5 px-4 pt-4">
-      <div className="rounded-xl bg-warning-soft px-3 py-2 text-xs leading-relaxed text-warning-foreground">{ADMIN_NOTICE}</div>
+      <div className="rounded-xl bg-warning-soft px-3 py-2 text-xs leading-relaxed text-warning-foreground">
+        {ADMIN_NOTICE}
+        <div className="mt-2 border-t border-warning/40 pt-2 text-warning-foreground/90">
+          Payouts aren&apos;t live yet — PI_APP_WALLET_SEED must be configured before release/refund actions can move real funds.
+        </div>
+      </div>
       <nav aria-label="Admin sections" className="ps-no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">{ADMIN_TABS.map((item) => <button type="button" key={item.id} onClick={() => { setTab(item.id); setSaved(false); }} className={`shrink-0 rounded-full px-3 py-2 text-xs font-semibold ${tab === item.id ? "bg-primary text-primary-foreground" : "bg-secondary text-secondary-foreground"}`}>{item.label}</button>)}</nav>
       <section aria-labelledby="admin-section-title"><div className="flex items-start justify-between gap-3"><div><h2 id="admin-section-title" className="text-lg font-bold text-foreground">{active.label}</h2><p className="mt-1 text-sm text-muted-foreground">{active.hint}</p></div><Button variant="outline" size="sm" onClick={refresh} disabled={loading}>{loading ? "Loading…" : "Refresh"}</Button></div>
         {error && <p role="alert" className="mt-3 rounded-xl bg-destructive-soft px-3 py-2 text-xs text-destructive">Demo data could not be loaded. Try again.</p>}

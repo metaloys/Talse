@@ -1,6 +1,20 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { createA2UPayment } from "@/lib/pi-platform";
 
+export class PayoutNotConfiguredError extends Error {
+  status = 503;
+  constructor() {
+    super("Payouts aren't live yet: PI_APP_WALLET_SEED is not configured.");
+    this.name = "PayoutNotConfiguredError";
+  }
+}
+
+function requirePayoutSigner(): string {
+  const seed = process.env.PI_APP_WALLET_SEED?.trim();
+  if (!seed) throw new PayoutNotConfiguredError();
+  return seed;
+}
+
 /**
  * Pays out an escrowed hire_request — to the provider (release) or back to
  * the buyer (refund). Shared by:
@@ -23,6 +37,8 @@ export async function payoutHireRequest(params: {
     .eq("id", params.hireRequestId)
     .single();
   if (fetchErr || !hr) throw new Error("Hire request not found");
+
+  requirePayoutSigner();
 
   const recipient = params.favor === "provider" ? hr.provider_uid : hr.buyer_uid;
   const payment = await createA2UPayment({
@@ -52,8 +68,15 @@ export async function payoutHireRequest(params: {
     .from("hire_requests")
     .update(update)
     .eq("id", params.hireRequestId)
+    .eq("status", hr.status)
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === "PGRST116") {
+      throw new Error("This payout request is no longer valid because the request status changed concurrently.");
+    }
+    throw new Error(error.message);
+  }
+  if (!data) throw new Error("Hire request was not updated; status may have changed during payout.");
   return data;
 }

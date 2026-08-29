@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { requireAdmin, NotAdminError } from "@/lib/admin";
-import { payoutHireRequest } from "@/lib/dispute-resolution";
+import { payoutHireRequest, PayoutNotConfiguredError } from "@/lib/dispute-resolution";
 
 // POST /api/admin/disputes/[id]/resolve — { favorProvider: boolean, note? }
 // The one place a dispute actually moves money: releases to the provider
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   } catch (err) {
     if (err instanceof NotAdminError) return NextResponse.json({ error: err.message }, { status: err.status });
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
+    if (err instanceof PayoutNotConfiguredError) return NextResponse.json({ error: err.message }, { status: err.status });
     return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
   }
 }

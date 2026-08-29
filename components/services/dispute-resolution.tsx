@@ -94,7 +94,11 @@ export function DisputeResolution({ onClose }: { onClose: () => void }) {
       setSelectedId(null);
       await load();
     } catch (err) {
-      pushToast(err instanceof Error ? err.message : "Action failed", "warning");
+      const raw = err instanceof Error ? err.message : "Action failed";
+      const message = /payouts? aren.t live yet|PI_APP_WALLET_SEED|wallet seed/i.test(raw)
+        ? "Payouts aren't live yet — the app wallet seed is not configured."
+        : raw;
+      pushToast(message, "warning");
     }
   };
 
