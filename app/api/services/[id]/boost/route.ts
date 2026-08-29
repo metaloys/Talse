@@ -13,20 +13,35 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     const { paymentId, txid } = await req.json();
     if (!paymentId) return NextResponse.json({ error: "Missing paymentId" }, { status: 400 });
 
+    const { data: service, error: fetchErr } = await supabaseAdmin
+      .from("services")
+      .select("owner_uid")
+      .eq("id", params.id)
+      .single();
+    if (fetchErr || !service) return NextResponse.json({ error: "Service not found" }, { status: 404 });
+    if (service.owner_uid !== me.uid) {
+      return NextResponse.json({ error: "Forbidden: not the owner of this service" }, { status: 403 });
+    }
+
     const payment = await getPayment(paymentId);
-    if (payment.user_uid !== me.uid) {
-      return NextResponse.json({ error: "Payment does not belong to caller" }, { status: 403 });
+    if (payment.user_uid !== me.uid || payment.user_uid !== service.owner_uid) {
+      return NextResponse.json({ error: "Payment does not belong to the service owner" }, { status: 403 });
     }
     if (!payment.status?.developer_completed) {
       return NextResponse.json({ error: "Payment not completed" }, { status: 409 });
     }
 
+    // TOCTOU note: services are not reassigned mid-request in this product flow,
+    // so the ownership check is low-risk compared to the payout race in
+    // lib/dispute-resolution.ts. The service owner is still verified immediately
+    // before the update, then the row update is bound to the same service id.
     const boostedUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
     const { error: updateErr } = await supabaseAdmin
       .from("services")
       .update({ boosted_until: boostedUntil })
-      .eq("id", params.id);
+      .eq("id", params.id)
+      .eq("owner_uid", service.owner_uid);
     if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
 
     await supabaseAdmin.from("boost_purchases").insert({
