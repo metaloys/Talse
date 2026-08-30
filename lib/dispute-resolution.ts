@@ -53,17 +53,7 @@ export async function payoutHireRequest(params: {
     },
   });
 
-  // Development-only: log the raw Pi Platform payment record so we can
-  // verify which field contains the recipient Stellar address. This is
-  // safe to log (no secrets). Remove this log after verification.
-  if (process.env.NODE_ENV !== "production") {
-    try {
-      // eslint-disable-next-line no-console
-      console.debug("[payoutHireRequest] createA2UPayment response:", JSON.stringify(payment));
-    } catch (e) {
-      // ignore logging failures
-    }
-  }
+  // Debug log removed after verification per audit request.
 
   // Payment created by Pi Platform returned as `payment`.
   // Now sign and submit the Stellar transaction using the app wallet seed,
