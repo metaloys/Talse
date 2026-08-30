@@ -125,6 +125,7 @@ interface PiAuthContextType {
   products: Product[] | null;
   restoredPurchases: UserPurchaseBalance[] | null;
   reinitialize: () => Promise<void>;
+  logout: () => Promise<void>;
   /** Real Pi Platform API access token (scopes: username, payments).
    *  Send as `Authorization: Bearer <accessToken>` to our own /api/* routes —
    *  this is the token our backend verifies server-side against
@@ -309,6 +310,18 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     initialize();
   }, []);
 
+  const logout = async () => {
+    // Reset in-memory auth state so the next authenticate() call prompts again.
+    setAccessToken(null);
+    setPiUser(null);
+    setIsAuthenticated(false);
+    setSdk(null);
+    setProducts(null);
+    setRestoredPurchases(null);
+    // Re-run the initialize flow which invokes window.Pi.authenticate().
+    await initialize();
+  };
+
   const value: PiAuthContextType = {
     isAuthenticated,
     authMessage,
@@ -319,6 +332,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     reinitialize: initialize,
     accessToken,
     piUser,
+    logout,
   };
 
   return (

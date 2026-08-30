@@ -14,6 +14,7 @@ import {
   type Service,
 } from "@/lib/services/data";
 import { useServices } from "@/contexts/services-context";
+import { usePiAuth } from "@/contexts/pi-auth-context";
 import { ConfirmSheet } from "./feedback";
 import { Avatar, Button, Card, cx, EmptyState, Field, Pill, TextArea, TextInput, Toggle } from "./ui";
 import {
@@ -36,6 +37,7 @@ export function ProfileScreen({
   onOpenService: (s: Service) => void;
 }) {
   const { profile, username, myListings, saveProfile, toggleServiceActive, deleteService } = useServices();
+  const { logout } = usePiAuth();
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
@@ -168,6 +170,11 @@ export function ProfileScreen({
           <Card className="bg-secondary/50 p-4">
             <p className="text-[11px] leading-relaxed text-muted-foreground">{DISCLAIMER}</p>
           </Card>
+          <div className="px-4 pt-4">
+            <Button variant="outline" className="w-full" onClick={() => void logout()}>
+              Log out
+            </Button>
+          </div>
         </div>
       )}
 
