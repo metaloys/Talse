@@ -1,4 +1,4 @@
-import * as StellarSdk from "@stellar/stellar-sdk";
+import { Horizon, Keypair, TransactionBuilder, Networks, Operation, Asset, Memo } from "@stellar/stellar-sdk";
 
 // Testnet-only network passphrase for Pi
 const NETWORK_PASSPHRASE = "Pi Testnet";
@@ -8,8 +8,8 @@ export async function submitA2UPayment(payment: any, seed: string): Promise<stri
   if (!seed) throw new Error("PI_APP_WALLET_SEED is not configured");
 
   // Derive keypair from seed (do NOT log the seed or keypair)
-  const keypair = StellarSdk.Keypair.fromSecret(seed);
-  const server = new StellarSdk.Server(HORIZON_URL);
+  const keypair = Keypair.fromSecret(seed);
+  const server = new Horizon.Server(HORIZON_URL);
 
   // Determine recipient address from the payment object. We don't assume
   // Use the explicitly-verified field `to_address` returned by Pi Platform.
@@ -27,16 +27,16 @@ export async function submitA2UPayment(payment: any, seed: string): Promise<stri
   // Load account for sequence number
   const account = await server.loadAccount(keypair.publicKey());
 
-  const txb = new StellarSdk.TransactionBuilder(account, {
+  const txb = new TransactionBuilder(account, {
     fee: "100",
     networkPassphrase: NETWORK_PASSPHRASE,
   })
-    .addOperation(StellarSdk.Operation.payment({
+    .addOperation(Operation.payment({
       destination: recipient,
-      asset: StellarSdk.Asset.native(),
+      asset: Asset.native(),
       amount: amountStr,
     }))
-    .addMemo(StellarSdk.Memo.text(String(payment?.identifier ?? payment?.id ?? "")))
+    .addMemo(Memo.text(String(payment?.identifier ?? "")))
     .setTimeout(30);
 
   const tx = txb.build();
