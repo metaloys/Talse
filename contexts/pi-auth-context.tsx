@@ -275,21 +275,15 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
         setAuthMessage("Initializing optional Pi services...");
         const sdkLite = await window.SDKLite.init();
         const pi = buildPiSdk();
-        const success = await sdkLite.login();
-        if (!success) throw new Error("Optional Pi services login failed");
 
         const sdkInstance = createSdk(sdkLite, pi);
         setSdk(sdkInstance);
-        await fetchProducts(sdkInstance);
 
-        try {
-          const { purchases } = await sdkInstance.state.restore();
-          setRestoredPurchases(purchases);
-          console.log("[PiAuth] Purchases restored", purchases);
-        } catch (restoreError) {
-          console.error("[PiAuth] Failed to restore purchases:", restoreError);
-          setRestoredPurchases([]);
-        }
+        // Do not call `sdkLite.login()` — this backend endpoint is currently
+        // unreachable and the login attempt only triggers a failing consent
+        // prompt. Leave products/restores empty so the UI stays functional.
+        setProducts([]);
+        setRestoredPurchases([]);
       } catch (optionalError) {
         console.error("[PiAuth] Optional Pi services unavailable:", optionalError);
         setProducts([]);
