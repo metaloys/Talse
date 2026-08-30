@@ -185,3 +185,10 @@ $$ language plpgsql;
 drop trigger if exists trg_reviews_rollup on reviews;
 create trigger trg_reviews_rollup after insert or update or delete on reviews
   for each row execute function refresh_provider_rating();
+
+-- ---------------------------------------------------------------------------
+-- Added: profile.location column (brief#17)
+-- Ensure the 'location' field is available for the UI's Profile type.
+-- Run this in the Supabase SQL editor or include in your migration pipeline.
+-- ---------------------------------------------------------------------------
+alter table profiles add column if not exists location text;

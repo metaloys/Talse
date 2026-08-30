@@ -14,15 +14,11 @@ import { backendApi } from "@/lib/backend-api";
 import {
   APP_NAME,
   CATEGORIES,
-  DEFAULT_META,
   DEFAULT_PROFILE,
-  KEY_META,
   KEY_PROFILE,
   clampNum,
   cleanMultiline,
-  metaToBlob,
   profileToBlob,
-  sanitizeMeta,
   sanitizeProfile,
   todayISO,
   uid,
@@ -30,7 +26,7 @@ import {
   type ConversationMessage,
   type DeliveryId,
   type HireRequest,
-  type MetaState,
+  
   type Profile,
   type PublicProvider,
   type RequestStatus,
@@ -251,7 +247,6 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
   const [username, setUsername] = useState("Pioneer");
 
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
-  const [meta, setMeta] = useState<MetaState>(DEFAULT_META);
 
   const [listings, setListings] = useState<Service[]>([]);
   const [requests, setRequests] = useState<HireRequest[]>([]);
@@ -260,18 +255,31 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
 
   const profileRef = useRef(profile);
-  const metaRef = useRef(meta);
   profileRef.current = profile;
-  metaRef.current = meta;
 
   const troubleRef = useRef((v: boolean) => setStorageTrouble(v));
   const profileWriter = useRef<KeyWriter | null>(null);
-  const metaWriter = useRef<KeyWriter | null>(null);
 
-  if (!profileWriter.current && storeRef.current) {
-    const store = storeRef.current;
-    profileWriter.current = new KeyWriter(store, KEY_PROFILE, 900, troubleRef.current);
-    metaWriter.current = new KeyWriter(store, KEY_META, 1200, troubleRef.current);
+  if (!profileWriter.current) {
+    if (accessToken) {
+      const netStore: StorageApi = {
+        get: async (_k: string) => {
+          const res = await fetch("/api/profile", { headers: { Authorization: `Bearer ${accessToken}` } });
+          if (!res.ok) throw new Error("Failed to load profile");
+          return res.json();
+        },
+        set: async (_k: string, blob: Record<string, unknown>) => {
+          await fetch("/api/profile", {
+            method: "PATCH",
+            headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify(blob),
+          });
+        },
+      };
+      profileWriter.current = new KeyWriter(netStore, KEY_PROFILE, 900, troubleRef.current);
+    } else if (storeRef.current) {
+      profileWriter.current = new KeyWriter(storeRef.current, KEY_PROFILE, 900, troubleRef.current);
+    }
   }
 
   const pushToast = (text: string, tone: Toast["tone"] = "info") => {
@@ -334,32 +342,68 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
 
     (async () => {
       const store = storeRef.current;
-      if (store && profileWriter.current) {
+      if (accessToken) {
         try {
-          let pRec: any = null;
-          let mRec: any = null;
+          const res = await fetch("/api/profile", { headers: { Authorization: `Bearer ${accessToken}` } });
+          if (res.ok) {
+            const data = await res.json();
+            if (!cancelled) {
+              const loadedProfile = {
+                ...sanitizeProfile(data),
+                piId: sanitizeProfile(data).piId || username || "Pioneer",
+              };
+              setProfile(loadedProfile);
+            }
+          } else {
+            // fallback to legacy store if available
+            if (store && profileWriter.current) {
+              try {
+                const pRec = await store.get(KEY_PROFILE).catch(() => null);
+                if (!cancelled) {
+                  const loadedProfile = {
+                    ...sanitizeProfile(pRec),
+                    piId: sanitizeProfile(pRec).piId || username || "Pioneer",
+                  };
+                  setProfile(loadedProfile);
+                }
+              } catch {
+                if (!cancelled) setStorageTrouble(true);
+              }
+            }
+          }
+        } catch (e) {
+          // network error — fallback to legacy store if available
+          if (store && profileWriter.current) {
+            try {
+              const pRec = await store.get(KEY_PROFILE).catch(() => null);
+              if (!cancelled) {
+                const loadedProfile = {
+                  ...sanitizeProfile(pRec),
+                  piId: sanitizeProfile(pRec).piId || username || "Pioneer",
+                };
+                setProfile(loadedProfile);
+              }
+            } catch {
+              if (!cancelled) setStorageTrouble(true);
+            }
+          } else {
+            if (!cancelled) setStorageTrouble(true);
+          }
+        }
+      } else {
+        if (store && profileWriter.current) {
           try {
-            pRec = await store.get(KEY_PROFILE);
+            const pRec = await store.get(KEY_PROFILE).catch(() => null);
+            if (!cancelled) {
+              const loadedProfile = {
+                ...sanitizeProfile(pRec),
+                piId: sanitizeProfile(pRec).piId || username || "Pioneer",
+              };
+              setProfile(loadedProfile);
+            }
           } catch {
-            pRec = null;
+            if (!cancelled) setStorageTrouble(true);
           }
-          try {
-            mRec = await store.get(KEY_META);
-          } catch {
-            mRec = null;
-          }
-          if (!cancelled) {
-            const loadedProfile = {
-              ...sanitizeProfile(pRec),
-              piId: sanitizeProfile(pRec).piId || username || "Pioneer",
-            };
-            setProfile(loadedProfile);
-            setMeta(sanitizeMeta(mRec));
-          }
-        } catch {
-          // Swallow any unexpected errors reading the legacy store so that
-          // a dead backend doesn't surface noisy exceptions to the console.
-          if (!cancelled) setStorageTrouble(true);
         }
       }
 
@@ -382,7 +426,6 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const flushAll = () => {
       profileWriter.current?.flushSync();
-      metaWriter.current?.flushSync();
     };
     const onVis = () => {
       if (document.visibilityState === "hidden") flushAll();
