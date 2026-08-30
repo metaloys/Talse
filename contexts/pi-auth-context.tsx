@@ -273,15 +273,18 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
         setAuthMessage("Loading optional Pi services...");
         await loadSDKLite();
         setAuthMessage("Initializing optional Pi services...");
-        const sdkLite = await window.SDKLite.init();
+        // Development: mark when we would call SDKLite.init() for diagnosis.
+        // eslint-disable-next-line no-console
+        console.debug("[PiAuth] about to call SDKLite.init()");
+
+        // Skip calling `window.SDKLite.init()` to avoid triggering the
+        // SDKLite consent prompt in environments where the backend endpoint
+        // is unreachable. Products/restoredPurchases are intentionally
+        // left empty so UI remains functional without SDKLite.
+        // If in the future SDKLite init is required, replace this block
+        // with a guarded call to `window.SDKLite.init()` and createSdk().
         const pi = buildPiSdk();
-
-        const sdkInstance = createSdk(sdkLite, pi);
-        setSdk(sdkInstance);
-
-        // Do not call `sdkLite.login()` — this backend endpoint is currently
-        // unreachable and the login attempt only triggers a failing consent
-        // prompt. Leave products/restores empty so the UI stays functional.
+        setSdk(null);
         setProducts([]);
         setRestoredPurchases([]);
       } catch (optionalError) {
