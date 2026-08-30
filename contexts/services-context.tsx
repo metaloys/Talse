@@ -336,7 +336,18 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
       const store = storeRef.current;
       if (store && profileWriter.current) {
         try {
-          const [pRec, mRec] = await Promise.all([store.get(KEY_PROFILE), store.get(KEY_META)]);
+          let pRec: any = null;
+          let mRec: any = null;
+          try {
+            pRec = await store.get(KEY_PROFILE);
+          } catch {
+            pRec = null;
+          }
+          try {
+            mRec = await store.get(KEY_META);
+          } catch {
+            mRec = null;
+          }
           if (!cancelled) {
             const loadedProfile = {
               ...sanitizeProfile(pRec),
@@ -346,6 +357,8 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
             setMeta(sanitizeMeta(mRec));
           }
         } catch {
+          // Swallow any unexpected errors reading the legacy store so that
+          // a dead backend doesn't surface noisy exceptions to the console.
           if (!cancelled) setStorageTrouble(true);
         }
       }
