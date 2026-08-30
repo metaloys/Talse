@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
-import { completePayment } from "@/lib/pi-platform";
+import { completePayment, getPayment } from "@/lib/pi-platform";
 
 /**
  * Called from the client's Pi.createPayment onReadyForServerCompletion callback:
@@ -30,7 +30,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "paymentId does not match the approved payment" }, { status: 400 });
     }
 
-    await completePayment(paymentId, txid);
+    // Fetch the payment record and skip double-completing if already done.
+    const payment = await getPayment(paymentId);
+    if (!payment?.status?.developer_completed) {
+      await completePayment(paymentId, txid);
+    }
 
     const { data, error } = await supabaseAdmin
       .from("hire_requests")

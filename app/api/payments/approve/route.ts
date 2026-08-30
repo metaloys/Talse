@@ -37,7 +37,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Payment amount does not match hire request" }, { status: 400 });
     }
 
-    await approvePayment(paymentId);
+    // Idempotency: if the Pi Platform payment record already shows the
+    // developer approval flag, skip calling approvePayment() again.
+    if (!payment?.status?.developer_approved) {
+      await approvePayment(paymentId);
+    }
 
     await supabaseAdmin
       .from("hire_requests")
