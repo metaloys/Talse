@@ -273,20 +273,27 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
         setAuthMessage("Loading optional Pi services...");
         await loadSDKLite();
         setAuthMessage("Initializing optional Pi services...");
-        // Development: mark when we would call SDKLite.init() for diagnosis.
-        // eslint-disable-next-line no-console
-        console.debug("[PiAuth] about to call SDKLite.init()");
+          // Development: mark when we will call SDKLite.init() for diagnosis.
+          // eslint-disable-next-line no-console
+          console.debug("[PiAuth] about to call SDKLite.init()");
 
-        // Skip calling `window.SDKLite.init()` to avoid triggering the
-        // SDKLite consent prompt in environments where the backend endpoint
-        // is unreachable. Products/restoredPurchases are intentionally
-        // left empty so UI remains functional without SDKLite.
-        // If in the future SDKLite init is required, replace this block
-        // with a guarded call to `window.SDKLite.init()` and createSdk().
-        const pi = buildPiSdk();
-        setSdk(null);
-        setProducts([]);
-        setRestoredPurchases([]);
+          // Initialize SDKLite (keep the SDK state available for the
+          // legacy profile/store bridge). Do NOT call `sdkLite.login()`
+          // here; that login triggers a consent prompt when the backend
+          // endpoint is unreachable. We add the debug marker above so
+          // you can confirm timing in the browser before any further
+          // removal of `SDKLite.init()`.
+          const sdkLite = await window.SDKLite.init();
+          const pi = buildPiSdk();
+
+          const sdkInstance = createSdk(sdkLite, pi);
+          setSdk(sdkInstance);
+
+          // Do not call `sdkLite.login()` — leave products/restoredPurchases
+          // empty for now; the SDK instance remains available for the
+          // profile-store bridge until migration completes.
+          setProducts([]);
+          setRestoredPurchases([]);
       } catch (optionalError) {
         console.error("[PiAuth] Optional Pi services unavailable:", optionalError);
         setProducts([]);
