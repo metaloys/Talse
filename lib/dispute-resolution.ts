@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { createA2UPayment } from "@/lib/pi-platform";
+import { createA2UPayment, completePayment } from "@/lib/pi-platform";
+import { submitA2UPayment } from "@/lib/pi-a2u";
 
 export class PayoutNotConfiguredError extends Error {
   status = 503;
@@ -52,7 +53,34 @@ export async function payoutHireRequest(params: {
     },
   });
 
-  const txid = payment.identifier ?? payment.id ?? null;
+  // Payment created by Pi Platform returned as `payment`.
+  // Now sign and submit the Stellar transaction using the app wallet seed,
+  // then call Pi's complete endpoint with the real tx hash.
+  const seed = requirePayoutSigner();
+
+  // Submit to Stellar (may throw). This moves funds on-chain.
+  let txhash: string;
+  try {
+    txhash = await submitA2UPayment(payment, seed);
+  } catch (submitErr) {
+    // Signing/submission failed — do not update DB. Surface the error.
+    throw new Error(`Failed to submit A2U payment: ${submitErr instanceof Error ? submitErr.message : String(submitErr)}`);
+  }
+
+  // Complete the Pi payment using the txhash. If this fails, log loudly
+  // and re-throw so the DB is NOT updated while on-chain movement may have occurred.
+  const paymentId = payment?.id ?? payment?.identifier;
+  try {
+    await completePayment(paymentId, txhash);
+  } catch (completeErr) {
+    // Critical mismatch: funds may have moved but Pi did not acknowledge completion.
+    // Log verbosely server-side for manual reconciliation.
+    // eslint-disable-next-line no-console
+    console.error("[Payout] COMPLETE_PAYMENT_FAILED: paymentId=", paymentId, "txhash=", txhash, "error=", completeErr);
+    throw new Error(`Completing Pi payment failed after submit: ${completeErr instanceof Error ? completeErr.message : String(completeErr)}`);
+  }
+
+  const txid = txhash;
   const update: Record<string, unknown> =
     params.favor === "provider"
       ? { status: "released", release_txid: txid }

@@ -67,5 +67,16 @@ export async function createA2UPayment(params: {
     }),
   });
   if (!res.ok) throw new Error(`Pi A2U create failed (${res.status}): ${await res.text()}`);
-  return res.json();
+  const json = await res.json();
+  // Development-only: log the raw payment shape so callers can confirm
+  // which field contains the recipient/steller address. DO NOT log secrets.
+  if (process.env.NODE_ENV !== "production") {
+    try {
+      // eslint-disable-next-line no-console
+      console.debug("[createA2UPayment] response:", json);
+    } catch (e) {
+      // ignore logging failures
+    }
+  }
+  return json;
 }
