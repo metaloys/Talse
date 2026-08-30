@@ -248,13 +248,14 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
 
       // Raw Pi.authenticate() call — distinct from @swetate's pi.auth.login()
       // below. This is what actually gets us a Pi Platform API access token
-      // (scoped for 'payments'), which our own backend (app/api/*) verifies
-      // server-side against api.minepi.com/v2/me before trusting any write.
+      // (scoped for 'username', 'payments', and 'wallet_address'), which our
+      // own backend (app/api/*) verifies server-side against
+      // api.minepi.com/v2/me before trusting any write.
       // onIncompletePaymentFound is required by Pi's SDK: it fires if the
       // user has a payment from a previous session that never completed.
       setAuthMessage("Authenticating with Pi...");
       const authResult = await window.Pi.authenticate(
-        ["username", "payments"],
+        ["username", "payments", "wallet_address"],
         (payment: any) => {
           // An incomplete payment from a prior session. In production, POST
           // this to /api/payments/complete (or /cancel) so it isn't stuck.
