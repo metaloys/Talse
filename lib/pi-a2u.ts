@@ -1,9 +1,4 @@
-// Require the Stellar SDK at runtime. The package's typings and module
-// resolution can vary by version; use a runtime require and treat it as
-// `any` to avoid type-export mismatches while keeping runtime behaviour.
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore
-const StellarSdk: any = require("@stellar/stellar-sdk");
+import * as StellarSdk from "@stellar/stellar-sdk";
 
 // Testnet-only network passphrase for Pi
 const NETWORK_PASSPHRASE = "Pi Testnet";
@@ -24,10 +19,10 @@ export async function submitA2UPayment(payment: any, seed: string): Promise<stri
     throw new Error("Could not determine recipient Stellar address from payment.to_address");
   }
 
-  // Amount: expect numeric or string; coerce to string with required precision
-  const amount = (payment?.amount ?? payment?.value ?? payment?.amount_in_pi ?? payment?.amount_pi) as number | string | undefined;
-  if (amount === undefined || amount === null) throw new Error("Payment amount missing from payment object");
-  const amountStr = typeof amount === "number" ? String(amount) : amount;
+  // Amount: use the canonical `amount` field from the Pi payment record.
+  const amount = payment?.amount;
+  if (amount === undefined || amount === null) throw new Error("Payment.amount missing from payment object");
+  const amountStr = String(amount);
 
   // Load account for sequence number
   const account = await server.loadAccount(keypair.publicKey());

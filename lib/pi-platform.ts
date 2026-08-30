@@ -70,14 +70,8 @@ export async function createA2UPayment(params: {
   const json = await res.json();
   // Development-only: log the raw payment shape so callers can confirm
   // which field contains the recipient/steller address. DO NOT log secrets.
-  if (process.env.NODE_ENV !== "production") {
-    try {
-      // eslint-disable-next-line no-console
-      console.debug("[createA2UPayment] response:", json);
-      // no-op comment: minor touch to include this file in the combined diff
-    } catch (e) {
-      // ignore logging failures
-    }
-  }
+  // Do not log payment responses here. Leave any inspection to temporary
+  // developer instrumentation in the caller; never emit payment objects by
+  // default from this central helper.
   return json;
 }
