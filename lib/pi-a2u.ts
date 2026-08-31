@@ -28,7 +28,7 @@ export async function submitA2UPayment(payment: any, seed: string): Promise<stri
   const account = await server.loadAccount(keypair.publicKey());
 
   const txb = new TransactionBuilder(account, {
-    fee: "100",
+    fee: "1000000",
     networkPassphrase: NETWORK_PASSPHRASE,
   })
     .addOperation(Operation.payment({
