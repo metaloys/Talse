@@ -45,8 +45,14 @@ export async function payoutHireRequest(params: {
   // NOTE: Per safety requirements, failures here must fail fast — do NOT
   // fall through to creating a new payment when listing or cancelling fails.
   const incomplete = await getIncompleteServerPayments();
+  // Diagnostic (brief#20): print raw incomplete payments and the computed match
+  // Note: this logs metadata only, no secrets.
+  // eslint-disable-next-line no-console
+  console.debug("[Payout] incomplete payments:", JSON.stringify(incomplete));
 
   const match = (incomplete || []).find((p: any) => p?.metadata?.hireRequestId === hr.id);
+  // eslint-disable-next-line no-console
+  console.debug("[Payout] match for hr.id =", hr.id, ":", JSON.stringify(match));
   if (match) {
     const identifier = match.id ?? match.identifier;
     const txVerified = Boolean(match?.status?.transaction_verified === true);
