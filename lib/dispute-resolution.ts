@@ -42,13 +42,9 @@ export async function payoutHireRequest(params: {
   requirePayoutSigner();
 
   const recipient = params.favor === "provider" ? hr.provider_uid : hr.buyer_uid;
-  // Recovery: check for any incomplete server-side A2U payments for this hire
-  // request that the app previously created but didn't finish. We must only
-  // consider payments whose metadata.hireRequestId matches this hire request.
-  const incomplete = await getIncompleteServerPayments().catch((e) => {
-    // If the Pi Platform call fails, do not block payouts; proceed to create
-    // a fresh payment — surface the error only for operators.
-    // eslint-disable-next-line no-console
+  // NOTE: Per safety requirements, failures here must fail fast — do NOT
+  // fall through to creating a new payment when listing or cancelling fails.
+  const incomplete = await getIncompleteServerPayments();
     console.error("[Payout] failed to list incomplete server payments:", e);
     return [] as any[];
   });
