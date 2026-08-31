@@ -55,7 +55,13 @@ export async function payoutHireRequest(params: {
   const incomplete = await getIncompleteServerPayments();
 
   // Only consider payments that belong to our app (have metadata.hireRequestId)
-  const appPayments = (incomplete || []).filter((p: any) => !!p?.metadata?.hireRequestId);
+  // and are of the expected kinds for escrow payouts.
+  const appPayments = (incomplete || []).filter((p: any) => {
+    const hasId = !!p?.metadata?.hireRequestId;
+    const kind = p?.metadata?.kind;
+    const allowedKind = kind === "escrow_release" || kind === "escrow_refund";
+    return hasId && allowedKind;
+  });
 
   // Find payment matching the current hire request, if any
   const match = appPayments.find((p: any) => p?.metadata?.hireRequestId === hr.id);
@@ -64,6 +70,19 @@ export async function payoutHireRequest(params: {
   if (match) {
     const identifier = match.identifier; // use identifier exclusively
     const txVerified = Boolean(match?.status?.transaction_verified === true);
+    // Validate the referenced hire request exists and is in an allowed in-flight state
+    const { data: refHr, error: refErr } = await supabaseAdmin
+      .from("hire_requests")
+      .select("id, status")
+      .eq("id", match?.metadata?.hireRequestId)
+      .single();
+    if (refErr || !refHr) {
+      throw new Error(`Referenced hire_request ${match?.metadata?.hireRequestId} not found; refusing to act on payment ${identifier}`);
+    }
+    const allowedStatuses = ["delivered", "disputed", "locked"];
+    if (!allowedStatuses.includes(String(refHr.status))) {
+      throw new Error(`Referenced hire_request ${refHr.id} has status '${refHr.status}', not eligible for payout recovery`);
+    }
     if (txVerified) {
       const txid = match?.transaction?.txid ?? match?.transaction?.hash ?? null;
       if (!txid) {
@@ -109,10 +128,29 @@ export async function payoutHireRequest(params: {
     // Cancelled successfully; continue to create fresh payment
   } else if (appPayments.length > 0) {
     // There are payments for OTHER hire requests — treat them as blockers.
-    // If any blocker has transaction_verified === true, we must NOT proceed.
+    // Validate each blocker against the referenced hire_request before acting.
     const blockers = appPayments.filter((p: any) => p?.metadata?.hireRequestId !== hr.id);
     for (const b of blockers) {
       const identifier = b.identifier;
+      const refId = b?.metadata?.hireRequestId;
+      const { data: refHr, error: refErr } = await supabaseAdmin
+        .from("hire_requests")
+        .select("id, status")
+        .eq("id", refId)
+        .single();
+      if (refErr || !refHr) {
+        // Skip acting on payments that reference missing hire records
+        // eslint-disable-next-line no-console
+        console.warn("[Payout] skipping payment referencing missing hire_request:", identifier, refId);
+        continue;
+      }
+      const allowedStatuses = ["delivered", "disputed", "locked"];
+      if (!allowedStatuses.includes(String(refHr.status))) {
+        // Skip payments whose referenced hire_request is not in an allowed state
+        // eslint-disable-next-line no-console
+        console.warn("[Payout] skipping payment referencing hire_request with ineligible status:", identifier, refId, refHr.status);
+        continue;
+      }
       const txVerified = Boolean(b?.status?.transaction_verified === true);
       if (txVerified) {
         // Blocker has funds moved on-chain for a different hire request — must
@@ -126,8 +164,9 @@ export async function payoutHireRequest(params: {
       if (!cancelResp || !cancelResp.status || cancelResp.status.cancelled !== true) {
         throw new Error(`Failed to cancel blocking payment ${identifier}: unexpected response`);
       }
+      // cancelled successfully; continue to next blocker
     }
-    // All blockers cancelled successfully; continue to create fresh payment
+    // All applicable blockers cancelled successfully; continue to create fresh payment
   }
 
   const payment = await createA2UPayment({

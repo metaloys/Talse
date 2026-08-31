@@ -42,6 +42,14 @@ export async function submitA2UPayment(payment: any, seed: string): Promise<stri
   const tx = txb.build();
   tx.sign(keypair);
 
-  const result = await server.submitTransaction(tx);
-  return result.hash;
+  try {
+    const result = await server.submitTransaction(tx);
+    return result.hash;
+  } catch (err: any) {
+    // Extract Horizon/Stellar rejection codes when present for diagnostics.
+    const extra = err?.response?.data ?? null;
+    const resultCodes = extra?.extras?.result_codes ?? null;
+    const details = extra ? JSON.stringify(extra) : String(err);
+    throw new Error(`Stellar submitTransaction failed: ${resultCodes ? JSON.stringify(resultCodes) : "no_result_codes"} -- ${details}`);
+  }
 }
