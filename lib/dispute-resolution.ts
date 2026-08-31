@@ -10,6 +10,14 @@ export class PayoutNotConfiguredError extends Error {
   }
 }
 
+export class PayoutBlockedByUnreconciledPaymentError extends Error {
+  status = 409;
+  constructor(message?: string) {
+    super(message ?? "Payout blocked by an unreconciled payment belonging to another hire request.");
+    this.name = "PayoutBlockedByUnreconciledPaymentError";
+  }
+}
+
 function requirePayoutSigner(): string {
   const seed = process.env.PI_APP_WALLET_SEED?.trim();
   if (!seed) throw new PayoutNotConfiguredError();
@@ -45,31 +53,24 @@ export async function payoutHireRequest(params: {
   // NOTE: Per safety requirements, failures here must fail fast — do NOT
   // fall through to creating a new payment when listing or cancelling fails.
   const incomplete = await getIncompleteServerPayments();
-  // Diagnostic (brief#20): print raw incomplete payments and the computed match
-  // Note: this logs metadata only, no secrets.
-  // eslint-disable-next-line no-console
-  console.debug("[Payout] incomplete payments:", JSON.stringify(incomplete));
 
-  const match = (incomplete || []).find((p: any) => p?.metadata?.hireRequestId === hr.id);
-  // eslint-disable-next-line no-console
-  console.debug("[Payout] match for hr.id =", hr.id, ":", JSON.stringify(match));
+  // Only consider payments that belong to our app (have metadata.hireRequestId)
+  const appPayments = (incomplete || []).filter((p: any) => !!p?.metadata?.hireRequestId);
+
+  // Find payment matching the current hire request, if any
+  const match = appPayments.find((p: any) => p?.metadata?.hireRequestId === hr.id);
+
+  // If there's a payment for this hire request, handle it first
   if (match) {
-    const identifier = match.id ?? match.identifier;
+    const identifier = match.identifier; // use identifier exclusively
     const txVerified = Boolean(match?.status?.transaction_verified === true);
     if (txVerified) {
-      // Funds already moved on-chain; use the existing txid to complete the
-      // payment server-side and then continue to DB update without creating
-      // or submitting another transaction.
       const txid = match?.transaction?.txid ?? match?.transaction?.hash ?? null;
       if (!txid) {
         throw new Error("Found transaction-verified payment but missing txid for completion");
       }
-    
-      // Complete on Pi Platform using existing txid
       await completePayment(identifier, txid);
 
-      // Update DB and return early following the same path as a normal
-      // completed payment below. We reuse the txid as the release/refund id.
       const txidFinal = txid;
       const update: Record<string, unknown> =
         params.favor === "provider"
@@ -97,17 +98,36 @@ export async function payoutHireRequest(params: {
       }
       if (!data) throw new Error("Hire request was not updated; status may have changed during payout.");
       return data;
-    } else {
-      // No on-chain transaction yet; cancel the stale payment and require
-      // a successful cancel response before proceeding to create a fresh
-      // payment. Any failure must bubble up and abort the payout.
-      const identifier = match.id ?? match.identifier;
+    }
+
+    // txVerified === false: cancel the stale payment and require a successful
+    // cancel before proceeding to create a fresh payment.
+    const cancelResp = await cancelPayment(identifier);
+    if (!cancelResp || !cancelResp.status || cancelResp.status.cancelled !== true) {
+      throw new Error(`Failed to cancel stale payment ${identifier}: unexpected response`);
+    }
+    // Cancelled successfully; continue to create fresh payment
+  } else if (appPayments.length > 0) {
+    // There are payments for OTHER hire requests — treat them as blockers.
+    // If any blocker has transaction_verified === true, we must NOT proceed.
+    const blockers = appPayments.filter((p: any) => p?.metadata?.hireRequestId !== hr.id);
+    for (const b of blockers) {
+      const identifier = b.identifier;
+      const txVerified = Boolean(b?.status?.transaction_verified === true);
+      if (txVerified) {
+        // Blocker has funds moved on-chain for a different hire request — must
+        // not proceed. Return a clear error for reconciliation.
+        // eslint-disable-next-line no-console
+        console.error("[Payout] blocked by unreconciled payment:", JSON.stringify({ identifier, hireRequestId: b.metadata?.hireRequestId }));
+        throw new PayoutBlockedByUnreconciledPaymentError(`Blocked by unreconciled payment ${identifier} for hire ${b.metadata?.hireRequestId}`);
+      }
+      // txVerified === false: cancel the blocker and require success before proceeding
       const cancelResp = await cancelPayment(identifier);
       if (!cancelResp || !cancelResp.status || cancelResp.status.cancelled !== true) {
-        throw new Error(`Failed to cancel stale payment ${identifier}: unexpected response`);
+        throw new Error(`Failed to cancel blocking payment ${identifier}: unexpected response`);
       }
-      // If we reach here, cancel succeeded and we continue to create a fresh payment.
     }
+    // All blockers cancelled successfully; continue to create fresh payment
   }
 
   const payment = await createA2UPayment({

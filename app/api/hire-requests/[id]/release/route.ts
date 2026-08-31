@@ -10,22 +10,22 @@ import { payoutHireRequest, PayoutNotConfiguredError } from "@/lib/dispute-resol
  * the single place the custodial A2U call happens, shared with the admin
  * dispute-resolution path. Swap it there once native escrow is available.
  */
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const me = await verifyPiToken(req.headers.get("authorization"));
+    const { id } = await params;
 
     const { data: hr, error: fetchErr } = await supabaseAdmin
       .from("hire_requests")
       .select("id, buyer_uid, status")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
     if (fetchErr || !hr) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (hr.buyer_uid !== me.uid) return NextResponse.json({ error: "Only the buyer can release funds" }, { status: 403 });
     if (hr.status !== "delivered") {
       return NextResponse.json({ error: `Cannot release from status '${hr.status}'` }, { status: 409 });
     }
-
-    const data = await payoutHireRequest({ hireRequestId: params.id, favor: "provider" });
+    const data = await payoutHireRequest({ hireRequestId: id, favor: "provider" });
     return NextResponse.json({ request: data });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
