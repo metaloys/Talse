@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { createA2UPayment, completePayment, getIncompleteServerPayments, cancelPayment } from "@/lib/pi-platform";
 import { submitA2UPayment } from "@/lib/pi-a2u";
+import { getPlatformFeePercent, formatPi } from "@/lib/fee-config";
 
 export class PayoutNotConfiguredError extends Error {
   status = 503;
@@ -169,14 +170,28 @@ export async function payoutHireRequest(params: {
     // All applicable blockers cancelled successfully; continue to create fresh payment
   }
 
+  // Compute platform fee and worker payout. Platform fee is retained by the
+  // platform/escrow account; blockchain gas is covered separately by the
+  // platform wallet (see lib/pi-a2u.ts fee setting).
+  const gross = Number(hr.amount);
+  const feePercent = getPlatformFeePercent();
+  const platformFee = formatPi(gross * feePercent);
+  const workerPayout = formatPi(gross - platformFee);
+
   const payment = await createA2UPayment({
     uid: recipient,
-    amount: hr.amount,
+    // Send only the worker payout amount to the recipient.
+    amount: workerPayout,
     memo: `${params.favor === "provider" ? "Release" : "Refund"} for hire request ${hr.id}`,
     metadata: {
       hireRequestId: hr.id,
       kind: params.favor === "provider" ? "escrow_release" : "escrow_refund",
       resolvedBy: params.resolvedBy ?? null,
+      // Persist fee accounting in the payment metadata for auditability.
+      grossAmount: gross,
+      platformFee: platformFee,
+      platformFeePercent: feePercent,
+      workerPayout: workerPayout,
     },
   });
 
@@ -212,8 +227,8 @@ export async function payoutHireRequest(params: {
   const txid = txhash;
   const update: Record<string, unknown> =
     params.favor === "provider"
-      ? { status: "released", release_txid: txid }
-      : { status: "refunded", refund_txid: txid };
+      ? { status: "released", release_txid: txid, platform_fee: platformFee, worker_payout: workerPayout }
+      : { status: "refunded", refund_txid: txid, platform_fee: platformFee, worker_payout: workerPayout };
 
   if (params.resolvedBy) {
     update.resolved_by = params.resolvedBy;

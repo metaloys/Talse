@@ -99,6 +99,16 @@ create index if not exists idx_hire_provider on hire_requests(provider_uid);
 create index if not exists idx_hire_status on hire_requests(status);
 
 -- ---------------------------------------------------------------------------
+-- Add platform fee accounting fields for payouts
+-- platform_fee: amount retained by the platform when a release occurs
+-- worker_payout: net amount sent to the provider
+-- These are additive and do not change existing rows unless updated
+-- by payout flows.
+-- ---------------------------------------------------------------------------
+alter table hire_requests add column if not exists platform_fee numeric(12,2);
+alter table hire_requests add column if not exists worker_payout numeric(12,2);
+
+-- ---------------------------------------------------------------------------
 -- messages (per hire_request conversation thread)
 -- ---------------------------------------------------------------------------
 create table if not exists messages (
