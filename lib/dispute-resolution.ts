@@ -45,9 +45,6 @@ export async function payoutHireRequest(params: {
   // NOTE: Per safety requirements, failures here must fail fast — do NOT
   // fall through to creating a new payment when listing or cancelling fails.
   const incomplete = await getIncompleteServerPayments();
-    console.error("[Payout] failed to list incomplete server payments:", e);
-    return [] as any[];
-  });
 
   const match = (incomplete || []).find((p: any) => p?.metadata?.hireRequestId === hr.id);
   if (match) {
@@ -95,16 +92,15 @@ export async function payoutHireRequest(params: {
       if (!data) throw new Error("Hire request was not updated; status may have changed during payout.");
       return data;
     } else {
-      // No on-chain transaction yet; cancel the stale payment and proceed
-      // to create a fresh payment below.
+      // No on-chain transaction yet; cancel the stale payment and require
+      // a successful cancel response before proceeding to create a fresh
+      // payment. Any failure must bubble up and abort the payout.
       const identifier = match.id ?? match.identifier;
-      try {
-        await cancelPayment(identifier);
-      } catch (e) {
-        // Non-fatal: log and continue to create a new payment.
-        // eslint-disable-next-line no-console
-        console.error("[Payout] failed to cancel stale payment:", identifier, e);
+      const cancelResp = await cancelPayment(identifier);
+      if (!cancelResp || !cancelResp.status || cancelResp.status.cancelled !== true) {
+        throw new Error(`Failed to cancel stale payment ${identifier}: unexpected response`);
       }
+      // If we reach here, cancel succeeded and we continue to create a fresh payment.
     }
   }
 
