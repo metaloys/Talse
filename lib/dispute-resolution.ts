@@ -41,16 +41,28 @@ export async function payoutHireRequest(params: {
   favor: "provider" | "buyer";
   resolvedBy?: string; // admin uid, when this is a dispute resolution
 }) {
-  const { data: hr, error: fetchErr } = await supabaseAdmin
+  // Acquire an atomic payout lock as the very first write. This update will
+  // only succeed if `payout_locked_at` is NULL and there are no existing
+  // release/refund txids set (prevents double payouts).
+  const now = new Date().toISOString();
+  const { data: hr, error: lockErr } = await supabaseAdmin
     .from("hire_requests")
-    .select("id, buyer_uid, provider_uid, amount, status")
+    .update({ payout_locked_at: now, payout_status: "processing" })
     .eq("id", params.hireRequestId)
+    .is("payout_locked_at", null)
+    .is("release_txid", null)
+    .is("refund_txid", null)
+    .select("id, buyer_uid, provider_uid, amount, status, release_txid, refund_txid")
     .single();
-  if (fetchErr || !hr) throw new Error("Hire request not found");
+
+  if (lockErr || !hr) {
+    throw new Error("Failed to acquire payout lock: another process holds it or payout already recorded.");
+  }
 
   requirePayoutSigner();
 
   const recipient = params.favor === "provider" ? hr.provider_uid : hr.buyer_uid;
+
   // NOTE: Per safety requirements, failures here must fail fast — do NOT
   // fall through to creating a new payment when listing or cancelling fails.
   const incomplete = await getIncompleteServerPayments();
@@ -105,7 +117,7 @@ export async function payoutHireRequest(params: {
 
       const { data, error } = await supabaseAdmin
         .from("hire_requests")
-        .update(update)
+        .update({ ...update, payout_status: "confirmed" })
         .eq("id", params.hireRequestId)
         .eq("status", hr.status)
         .select()
@@ -211,34 +223,46 @@ export async function payoutHireRequest(params: {
     throw new Error(`Failed to submit A2U payment: ${submitErr instanceof Error ? submitErr.message : String(submitErr)}`);
   }
 
-  // Complete the Pi payment using the txhash. If this fails, log loudly
-  // and re-throw so the DB is NOT updated while on-chain movement may have occurred.
+  // Immediately persist the txid so manual review can reconcile on-chain state
+  // even if the completion step fails.
+  try {
+    const txField = params.favor === "provider" ? { release_txid: txhash } : { refund_txid: txhash };
+    await supabaseAdmin.from("hire_requests").update({ ...txField, payout_status: "processing" }).eq("id", hr.id);
+  } catch (persistErr) {
+    // If persisting the txid fails, mark for manual review and abort.
+    await supabaseAdmin.from("hire_requests").update({ payout_status: "manual_review" }).eq("id", hr.id);
+    throw new Error(`Failed to persist txid for hire_request ${hr.id}: ${persistErr instanceof Error ? persistErr.message : String(persistErr)}`);
+  }
+
+  // Complete the Pi payment using the txhash. If this fails, mark manual_review
+  // and do NOT clear the lock — an admin must reconcile.
   const paymentId = payment?.id ?? payment?.identifier;
   try {
     await completePayment(paymentId, txhash);
   } catch (completeErr) {
-    // Critical mismatch: funds may have moved but Pi did not acknowledge completion.
-    // Log verbosely server-side for manual reconciliation.
     // eslint-disable-next-line no-console
     console.error("[Payout] COMPLETE_PAYMENT_FAILED: paymentId=", paymentId, "txhash=", txhash, "error=", completeErr);
+    await supabaseAdmin.from("hire_requests").update({ payout_status: "manual_review" }).eq("id", hr.id);
     throw new Error(`Completing Pi payment failed after submit: ${completeErr instanceof Error ? completeErr.message : String(completeErr)}`);
   }
 
+  // On success, finalize the hire_request status and accounting. Keep the
+  // payout_locked_at in place; clearing must be a manual admin action.
   const txid = txhash;
-  const update: Record<string, unknown> =
+  const finalUpdate: Record<string, unknown> =
     params.favor === "provider"
       ? { status: "released", release_txid: txid, platform_fee: platformFee, worker_payout: workerPayout }
       : { status: "refunded", refund_txid: txid, platform_fee: platformFee, worker_payout: workerPayout };
 
   if (params.resolvedBy) {
-    update.resolved_by = params.resolvedBy;
-    update.resolved_favor = params.favor;
-    update.dispute_stage = "resolved";
+    finalUpdate.resolved_by = params.resolvedBy;
+    finalUpdate.resolved_favor = params.favor;
+    finalUpdate.dispute_stage = "resolved";
   }
 
   const { data, error } = await supabaseAdmin
     .from("hire_requests")
-    .update(update)
+    .update({ ...finalUpdate, payout_status: "confirmed" })
     .eq("id", params.hireRequestId)
     .eq("status", hr.status)
     .select()
@@ -247,8 +271,13 @@ export async function payoutHireRequest(params: {
     if (error.code === "PGRST116") {
       throw new Error("This payout request is no longer valid because the request status changed concurrently.");
     }
+    // If DB write fails here, leave the record in `manual_review` state for admins.
+    await supabaseAdmin.from("hire_requests").update({ payout_status: "manual_review" }).eq("id", hr.id);
     throw new Error(error.message);
   }
-  if (!data) throw new Error("Hire request was not updated; status may have changed during payout.");
+  if (!data) {
+    await supabaseAdmin.from("hire_requests").update({ payout_status: "manual_review" }).eq("id", hr.id);
+    throw new Error("Hire request was not updated; status may have changed during payout.");
+  }
   return data;
 }

@@ -107,6 +107,9 @@ create index if not exists idx_hire_status on hire_requests(status);
 -- ---------------------------------------------------------------------------
 alter table hire_requests add column if not exists platform_fee numeric(12,2);
 alter table hire_requests add column if not exists worker_payout numeric(12,2);
+-- Payout protection: lock and status for preventing duplicate on-chain payouts
+alter table hire_requests add column if not exists payout_locked_at timestamptz;
+alter table hire_requests add column if not exists payout_status text default 'not_started';
 
 -- ---------------------------------------------------------------------------
 -- messages (per hire_request conversation thread)
