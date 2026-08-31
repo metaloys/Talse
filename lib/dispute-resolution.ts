@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { createA2UPayment, completePayment } from "@/lib/pi-platform";
+import { createA2UPayment, completePayment, getIncompleteServerPayments, cancelPayment } from "@/lib/pi-platform";
 import { submitA2UPayment } from "@/lib/pi-a2u";
 
 export class PayoutNotConfiguredError extends Error {
@@ -42,6 +42,76 @@ export async function payoutHireRequest(params: {
   requirePayoutSigner();
 
   const recipient = params.favor === "provider" ? hr.provider_uid : hr.buyer_uid;
+  // Recovery: check for any incomplete server-side A2U payments for this hire
+  // request that the app previously created but didn't finish. We must only
+  // consider payments whose metadata.hireRequestId matches this hire request.
+  const incomplete = await getIncompleteServerPayments().catch((e) => {
+    // If the Pi Platform call fails, do not block payouts; proceed to create
+    // a fresh payment — surface the error only for operators.
+    // eslint-disable-next-line no-console
+    console.error("[Payout] failed to list incomplete server payments:", e);
+    return [] as any[];
+  });
+
+  const match = (incomplete || []).find((p: any) => p?.metadata?.hireRequestId === hr.id);
+  if (match) {
+    const identifier = match.id ?? match.identifier;
+    const txVerified = Boolean(match?.status?.transaction_verified === true);
+    if (txVerified) {
+      // Funds already moved on-chain; use the existing txid to complete the
+      // payment server-side and then continue to DB update without creating
+      // or submitting another transaction.
+      const txid = match?.transaction?.txid ?? match?.transaction?.hash ?? null;
+      if (!txid) {
+        throw new Error("Found transaction-verified payment but missing txid for completion");
+      }
+    
+      // Complete on Pi Platform using existing txid
+      await completePayment(identifier, txid);
+
+      // Update DB and return early following the same path as a normal
+      // completed payment below. We reuse the txid as the release/refund id.
+      const txidFinal = txid;
+      const update: Record<string, unknown> =
+        params.favor === "provider"
+          ? { status: "released", release_txid: txidFinal }
+          : { status: "refunded", refund_txid: txidFinal };
+
+      if (params.resolvedBy) {
+        update.resolved_by = params.resolvedBy;
+        update.resolved_favor = params.favor;
+        update.dispute_stage = "resolved";
+      }
+
+      const { data, error } = await supabaseAdmin
+        .from("hire_requests")
+        .update(update)
+        .eq("id", params.hireRequestId)
+        .eq("status", hr.status)
+        .select()
+        .single();
+      if (error) {
+        if (error.code === "PGRST116") {
+          throw new Error("This payout request is no longer valid because the request status changed concurrently.");
+        }
+        throw new Error(error.message);
+      }
+      if (!data) throw new Error("Hire request was not updated; status may have changed during payout.");
+      return data;
+    } else {
+      // No on-chain transaction yet; cancel the stale payment and proceed
+      // to create a fresh payment below.
+      const identifier = match.id ?? match.identifier;
+      try {
+        await cancelPayment(identifier);
+      } catch (e) {
+        // Non-fatal: log and continue to create a new payment.
+        // eslint-disable-next-line no-console
+        console.error("[Payout] failed to cancel stale payment:", identifier, e);
+      }
+    }
+  }
+
   const payment = await createA2UPayment({
     uid: recipient,
     amount: hr.amount,

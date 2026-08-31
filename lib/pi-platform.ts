@@ -41,6 +41,25 @@ export async function getPayment(paymentId: string) {
   return res.json();
 }
 
+export async function getIncompleteServerPayments() {
+  const res = await fetch(`${PI_PLATFORM_API_BASE}/payments/incomplete_server_payments`, {
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`Pi get-incomplete-server-payments failed (${res.status}): ${await res.text()}`);
+  const json = await res.json();
+  // Expecting shape: { incomplete_server_payments: [ ... ] }
+  return json.incomplete_server_payments ?? [];
+}
+
+export async function cancelPayment(paymentId: string) {
+  const res = await fetch(`${PI_PLATFORM_API_BASE}/payments/${paymentId}/cancel`, {
+    method: "POST",
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error(`Pi cancel failed (${res.status}): ${await res.text()}`);
+  return res.json();
+}
+
 /**
  * Creates an app-to-user (A2U) payment — used for the release/refund leg of
  * the escrow flow, paying the app's own Pi wallet balance out to a provider
