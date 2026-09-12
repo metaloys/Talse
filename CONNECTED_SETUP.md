@@ -1,4 +1,4 @@
-# Pi Services — Connected Build
+# Talse — Connected Build
 
 This is the frontend from the original upload, wired to the Supabase +
 Next.js API backend. See `README.md` (the original backend doc, if present)

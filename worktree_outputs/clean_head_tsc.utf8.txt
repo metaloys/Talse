@@ -1,0 +1,45 @@
+﻿components/services/icons.tsx(22,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+  Type 'IconProps' is not assignable to type '{ strokeWidth?: number | undefined; }'.
+    Types of property 'strokeWidth' are incompatible.
+      Type 'string | number | undefined' is not assignable to type 'number | undefined'.
+        Type 'string' is not assignable to type 'number'.
+components/services/icons.tsx(32,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(43,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(52,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(60,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(69,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(77,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(85,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(93,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(101,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(109,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(117,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(125,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(134,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(143,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(154,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(165,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(174,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(183,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(192,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(201,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(211,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(220,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(228,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(236,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(246,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(255,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(263,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(272,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(280,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(298,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(309,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(317,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(327,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(337,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(346,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/icons.tsx(356,19): error TS2345: Argument of type 'IconProps' is not assignable to parameter of type 'SVGProps<SVGSVGElement> & { size?: number | undefined; } & { strokeWidth?: number | undefined; }'.
+components/services/service-detail.tsx(131,59): error TS18047: 'service' is possibly 'null'.
+components/services/service-detail.tsx(170,72): error TS2345: Argument of type 'Service | null' is not assignable to parameter of type 'Service'.
+  Type 'null' is not assignable to type 'Service'.
+

@@ -1,8 +1,9 @@
 import { Horizon, Keypair, TransactionBuilder, Networks, Operation, Asset, Memo } from "@stellar/stellar-sdk";
+import { PI_TESTNET_BLOCKCHAIN_API_BASE } from "@/lib/pi-env";
 
 // Testnet-only network passphrase for Pi
 const NETWORK_PASSPHRASE = "Pi Testnet";
-const HORIZON_URL = "https://api.testnet.minepi.com";
+const HORIZON_URL = PI_TESTNET_BLOCKCHAIN_API_BASE;
 
 export async function submitA2UPayment(payment: any, seed: string): Promise<string> {
   if (!seed) throw new Error("PI_APP_WALLET_SEED is not configured");

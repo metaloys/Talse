@@ -1,7 +1,7 @@
 import type { SVGProps } from "react";
 import type { CategoryId } from "@/lib/services/data";
 
-type IconProps = SVGProps<SVGSVGElement> & { size?: number };
+type IconProps = SVGProps<SVGSVGElement> & { size?: number; strokeWidth?: number };
 
 function base({ size = 24, strokeWidth = 1.8, ...props }: IconProps & { strokeWidth?: number }) {
   return {

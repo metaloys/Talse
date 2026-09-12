@@ -1,0 +1,34 @@
+[
+  {
+    "type": "console",
+    "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold"
+  },
+  {
+    "type": "console",
+    "text": "SDKMessaging instantiated on Pi environment: production"
+  },
+  {
+    "type": "console",
+    "text": "Pi SDK script loaded successfully"
+  },
+  {
+    "type": "console",
+    "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://app-cdn.minepi.com') does not match the recipient window's origin ('http://localhost:3003')."
+  },
+  {
+    "type": "console",
+    "text": "Failed to execute 'postMessage' on 'DOMWindow': The target origin provided ('https://app-cdn.minepi.com') does not match the recipient window's origin ('http://localhost:3003')."
+  },
+  {
+    "type": "error",
+    "text": "Admin button not found: TimeoutError: page.waitForSelector: Timeout 10000ms exceeded.\n=========================== logs ===========================\nwaiting for locator('button:has-text(\"Admin\")') to be visible\n============================================================"
+  },
+  {
+    "type": "error",
+    "text": "Admin sections nav not found"
+  },
+  {
+    "type": "tokenPanelPresent",
+    "present": true
+  }
+]

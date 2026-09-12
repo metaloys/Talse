@@ -7,8 +7,9 @@ import { requireAdmin, NotAdminError } from "@/lib/admin";
 // investigation, escalate, or just save a note. For the two outcomes that
 // actually move money (release to provider / refund buyer), use
 // /api/admin/disputes/[id]/resolve instead.
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const me = await verifyPiToken(req.headers.get("authorization"));
     requireAdmin(me.uid);
 
@@ -20,7 +21,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     const { data: existing, error: fetchErr } = await supabaseAdmin
       .from("hire_requests")
       .select("status")
-      .eq("id", params.id)
+      .eq("id", id)
       .single();
     if (fetchErr || !existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
     if (existing.status !== "disputed") {
@@ -29,12 +30,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
     const update: Record<string, unknown> = {};
     if (stage) update.dispute_stage = stage;
-    if (note !== undefined) update.admin_note = note;
+    if (note !== undefined) {
+      if (note !== null && typeof note !== "string") return NextResponse.json({ error: "Invalid admin note" }, { status: 400 });
+      if (typeof note === "string" && note.trim().length > 1000) return NextResponse.json({ error: "Admin note must be at most 1000 characters." }, { status: 400 });
+      update.admin_note = note;
+    }
 
     const { data, error } = await supabaseAdmin
       .from("hire_requests")
       .update(update)
-      .eq("id", params.id)
+      .eq("id", id)
       .select()
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

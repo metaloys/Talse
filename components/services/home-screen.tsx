@@ -25,7 +25,7 @@ export function HomeScreen({
   onCreate: () => void;
   onSeeAll: () => void;
 }) {
-  const { allServices, username } = useServices();
+  const { allServices, username, hasMore, loadMoreServices } = useServices();
 
   const featured = FEATURED_IDS.map((id) => allServices.find((s) => s.id === id)).filter(
     (s): s is Service => Boolean(s),
@@ -110,6 +110,13 @@ export function HomeScreen({
               <ServiceCard key={s.id} service={s} onOpen={() => onOpenService(s)} />
             ))}
           </div>
+          {hasMore && (
+            <div className="mt-4 flex justify-center">
+              <Button onClick={() => loadMoreServices()}>
+                Load more
+              </Button>
+            </div>
+          )}
         </section>
 
         {/* disclaimer footer */}

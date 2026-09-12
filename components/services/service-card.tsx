@@ -7,6 +7,7 @@ import {
   serviceImage,
   type Service,
 } from "@/lib/services/data";
+// fee breakdown removed from card view per UX request
 import { cx, Pill } from "./ui";
 import { CategoryIcon, IconClock } from "./icons";
 
@@ -48,7 +49,10 @@ export function ServiceCard({
         <h3 className="ps-clamp-2 text-sm font-semibold leading-snug text-foreground">{service.title}</h3>
         <p className="ps-clamp-1 text-xs text-muted-foreground">by {service.ownerName}</p>
         <div className="mt-auto flex items-center justify-between gap-2 pt-1">
-          <span className="text-sm font-bold text-primary ps-nums">{formatPi(service.price)}</span>
+          <div>
+            <span className="text-sm font-bold text-primary ps-nums">{formatPi(service.price)}</span>
+            {/* Fee breakdown intentionally hidden on listing card */}
+          </div>
           <Pill tone="neutral" className="text-[11px]">
             <IconClock size={12} />
             {deliveryLabel(service.deliveryId)}

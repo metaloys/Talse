@@ -1,9 +1,9 @@
 // ---------- App meta ----------
-export const APP_NAME = "Pi Services";
+export const APP_NAME = "Talse";
 export const APP_TAGLINE = "Hire and offer services with Pi.";
 export const CURRENCY = "π";
 export const DISCLAIMER =
-  "Pi Services is an independent community-built application and is not operated, endorsed, or guaranteed by Pi Network.";
+  "Talse is an independent community-built application and is not operated, endorsed, or guaranteed by Pi Network.";
 
 // ---------- storage keys ----------
 export const KEY_PROFILE = "services.profile";
@@ -27,7 +27,7 @@ export const MESSAGE_MAX = 600;
 export const MAX_PRICE = 1_000_000;
 
 // ---------- types ----------
-export type TabId = "home" | "categories" | "search" | "activity" | "profile";
+export type TabId = "home" | "search" | "activity" | "messages" | "profile";
 
 export type CategoryId =
   | "design"
@@ -75,6 +75,12 @@ export interface Service {
   active: boolean;
   createdAt: number;
   updatedAt: number;
+  ratingAvg?: number;
+  ratingCount?: number;
+  boostedUntil?: number;
+  jobsCompleted?: number;
+  refundsAgainstProvider?: number;
+  totalEarned?: number;
 }
 
 export interface HireRequest {
@@ -114,6 +120,7 @@ export interface ConversationMessage {
   providerPiId: string;
   senderPiId: string;
   text: string;
+  attachments?: string[];
   createdAt: number;
 }
 
@@ -123,6 +130,11 @@ export interface Profile {
   bio: string;
   location: string;
   joinedAt: number;
+  ratingAvg?: number;
+  ratingCount?: number;
+  jobsCompleted?: number;
+  refundsAgainstProvider?: number;
+  totalEarned?: number;
 }
 
 export interface SeedProvider {
@@ -317,6 +329,18 @@ export function hueFromString(s: string): number {
 }
 
 export function serviceImage(query: string, w = 600, h = 600): string {
+  if (!query) {
+    const q = encodeURIComponent("service");
+    return `/placeholder.svg?height=${h}&width=${w}&query=${q}`;
+  }
+
+  const trimmed = String(query).trim();
+  // If it's already a data URI (base64) or an absolute http(s) URL, return it
+  // directly so uploaded images are rendered unchanged.
+  if (/^data:image\//i.test(trimmed) || /^https?:\/\//i.test(trimmed)) {
+    return trimmed;
+  }
+
   const q = encodeURIComponent(query || "service");
   return `/placeholder.svg?height=${h}&width=${w}&query=${q}`;
 }
@@ -599,6 +623,11 @@ export interface PublicProvider {
   location: string;
   joinedAt: number;
   isMe: boolean;
+  ratingAvg: number;
+  ratingCount: number;
+  jobsCompleted: number;
+  refundsAgainstProvider: number;
+  totalEarned: number;
 }
 
 export function getSeedProvider(id: string): SeedProvider | undefined {
@@ -636,6 +665,11 @@ export function sanitizeProfile(record: any): Profile {
     bio: cleanMultiline(data.bio, BIO_MAX),
     location: cleanStr(data.location, LOCATION_MAX),
     joinedAt: clampNum(data.joinedAt, 0, Date.now() + DAY, 0),
+    ratingAvg: typeof data.rating_avg === "number" ? Number(data.rating_avg) : typeof data.ratingAvg === "number" ? data.ratingAvg : 0,
+    ratingCount: clampNum(data.rating_count ?? data.ratingCount, 0, 1_000_000, 0),
+    jobsCompleted: clampNum(data.jobs_completed ?? data.jobsCompleted, 0, 1_000_000, 0),
+    refundsAgainstProvider: clampNum(data.refunds_against_provider ?? data.refundsAgainstProvider, 0, 1_000_000, 0),
+    totalEarned: typeof data.total_earned === "number" ? Number(data.total_earned) : typeof data.totalEarned === "number" ? data.totalEarned : 0,
   };
 }
 

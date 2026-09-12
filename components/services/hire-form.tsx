@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePiAuth } from "@/contexts/pi-auth-context";
+import { supabaseAdmin } from "@/lib/supabase-server";
+import { backendApi } from "@/lib/backend-api";
 import {
   MESSAGE_MAX,
   cleanStr,
@@ -10,6 +13,7 @@ import {
   todayISO,
   type Service,
 } from "@/lib/services/data";
+import { getFrontendPlatformFeePercent, calcPlatformFee, BLOCKCHAIN_GAS_LABEL } from "@/lib/frontend-fee-config";
 import { useServices } from "@/contexts/services-context";
 import { Overlay } from "./feedback";
 import { Button, Card, cx, Field, IconButton, TextArea, TextInput } from "./ui";
@@ -31,6 +35,10 @@ export function HireForm({
   const [deadline, setDeadline] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
   const [attachDraft, setAttachDraft] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const { accessToken } = usePiAuth();
+  const { refreshRequests } = useServices();
   const [showErrors, setShowErrors] = useState(false);
 
   useEffect(() => {
@@ -57,13 +65,60 @@ export function HireForm({
     setAttachDraft("");
   };
 
+  const onFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const chosen = Array.from(e.target.files ?? []);
+    if (!chosen.length) return;
+    const cap = 6 - (attachments.length + files.length);
+    const toAdd = chosen.slice(0, cap);
+    setFiles((prev) => [...prev, ...toAdd]);
+    e.currentTarget.value = "";
+  };
+
+  const removeFile = (idx: number) => setFiles((prev) => prev.filter((_, i) => i !== idx));
+
+  const uploadFilesForRequest = async (hireRequestId: string) => {
+    if (!files.length) return [] as string[];
+    setUploading(true);
+    try {
+      const form = new FormData();
+      files.forEach((f) => form.append("file", f));
+      const res = await fetch(`/api/hire-requests/${hireRequestId}/attachments`, {
+        method: "POST",
+        body: form,
+        headers: { Authorization: `Bearer ${accessToken ?? ""}` },
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const data = await res.json();
+      return data.paths ?? [];
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const submit = () => {
     if (!canSend) {
       setShowErrors(true);
       return;
     }
-    hire({ service, message: trimmedMsg, deadline, attachments });
-    onSent();
+    void (async () => {
+      try {
+        // create hire request via backend directly so we get the id
+        const token = accessToken;
+        if (!token) throw new Error("Not authenticated");
+        const { request } = await backendApi.hireRequests.create({ serviceId: service.id, message: trimmedMsg, deadline, attachments }, token);
+        const hireId = request.id;
+        // upload files (if any) and append
+        const paths = await uploadFilesForRequest(hireId);
+        if (paths.length) {
+          // refresh requests to pick up updated attachments
+          await refreshRequests();
+        }
+        onSent();
+      } catch (err) {
+        console.error("Failed to send hire request:", err);
+        setShowErrors(true);
+      }
+    })();
   };
 
   const img = service.images[0];
@@ -89,6 +144,14 @@ export function HireForm({
                 <IconClock size={12} />
                 {deliveryLabel(service.deliveryId)}
               </span>
+            </div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              {(() => {
+                const pct = getFrontendPlatformFeePercent();
+                const fee = calcPlatformFee(service.price, pct);
+                const receive = Math.round((service.price - fee) * 100) / 100;
+                return `Platform fee (${Math.round(pct * 100)}%): -${formatPi(fee)} · Provider receives: ${formatPi(receive)} · ${BLOCKCHAIN_GAS_LABEL}`;
+              })()}
             </div>
           </div>
         </Card>
@@ -141,6 +204,24 @@ export function HireForm({
               <IconPlus size={18} />
             </IconButton>
           </div>
+          <div className="mt-2 flex items-center gap-2">
+            <input id="hire-files" type="file" accept="image/*,application/pdf" multiple onChange={onFileSelected} className="hidden" />
+            <label htmlFor="hire-files" className="ps-press inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm">Attach files</label>
+            {uploading && <span className="text-xs text-muted-foreground">Uploading…</span>}
+          </div>
+          {files.length > 0 && (
+            <div className="mt-2 space-y-1.5">
+              {files.map((f, i) => (
+                <div key={i} className="flex items-center gap-2 rounded-lg border border-border bg-secondary/50 px-3 py-2 text-sm">
+                  <IconPaperclip size={15} className="shrink-0 text-muted-foreground" />
+                  <span className="ps-clamp-1 flex-1 text-foreground">{f.name}</span>
+                  <IconButton label="Remove file" className="h-7 w-7 text-muted-foreground" onClick={() => removeFile(i)}>
+                    <IconTrash size={15} />
+                  </IconButton>
+                </div>
+              ))}
+            </div>
+          )}
           {attachments.length > 0 && (
             <div className="mt-2 space-y-1.5">
               {attachments.map((a, i) => (

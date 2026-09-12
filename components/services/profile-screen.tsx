@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   BIO_MAX,
   CATEGORY_MAP,
@@ -13,6 +14,7 @@ import {
   hueFromString,
   type Service,
 } from "@/lib/services/data";
+import { backendApi } from "@/lib/backend-api";
 import { useServices } from "@/contexts/services-context";
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { ConfirmSheet } from "./feedback";
@@ -31,22 +33,82 @@ export function ProfileScreen({
   onCreate,
   onEditService,
   onOpenService,
+  onOpenReviews,
+  onOpenAdmin,
 }: {
   onCreate: () => void;
   onEditService: (s: Service) => void;
   onOpenService: (s: Service) => void;
+  onOpenReviews: () => void;
+  onOpenAdmin: () => void;
 }) {
   const { profile, username, myListings, saveProfile, toggleServiceActive, deleteService } = useServices();
-  const { logout } = usePiAuth();
+  const { accessToken, logout } = usePiAuth();
 
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const [bio, setBio] = useState("");
   const [location, setLocation] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<Service | null>(null);
+  const [financialSummary, setFinancialSummary] = useState<{ totalSpent: number; lockedAsBuyer: number; owedToYou: number } | null>(null);
+  const [financialLoading, setFinancialLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminStatusLoading, setAdminStatusLoading] = useState(false);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setFinancialSummary(null);
+      setFinancialLoading(false);
+      setIsAdmin(false);
+      setAdminStatusLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setFinancialLoading(true);
+    setAdminStatusLoading(true);
+
+    void backendApi.profile
+      .getFinancialSummary(accessToken)
+      .then((summary) => {
+        if (cancelled) return;
+        setFinancialSummary({
+          totalSpent: Number(summary?.totalSpent) || 0,
+          lockedAsBuyer: Number(summary?.lockedAsBuyer) || 0,
+          owedToYou: Number(summary?.owedToYou) || 0,
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setFinancialSummary(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setFinancialLoading(false);
+      });
+
+    void backendApi.me
+      .getAdminStatus(accessToken)
+      .then((status) => {
+        if (cancelled) return;
+        setIsAdmin(Boolean(status?.isAdmin));
+      })
+      .catch(() => {
+        if (!cancelled) setIsAdmin(false);
+      })
+      .finally(() => {
+        if (!cancelled) setAdminStatusLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   const displayName = profile.name || username;
   const joined = profile.joinedAt || Date.now();
+  const ratingCount = profile.ratingCount ?? 0;
+  const ratingAvg = profile.ratingAvg ?? 0;
 
   const startEdit = () => {
     setName(profile.name || username);
@@ -106,6 +168,81 @@ export function ProfileScreen({
           </>
         )}
       </div>
+
+      {!editing && (
+        <>
+          <div className="px-4 pt-4">
+            <button
+              type="button"
+              onClick={onOpenReviews}
+              className="ps-press flex w-full items-center justify-between rounded-2xl border border-border bg-card p-3 text-left"
+            >
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Rating</p>
+                <p className="mt-1 text-lg font-bold text-foreground">
+                  {ratingCount > 0 ? ratingAvg.toFixed(1) : "—"}
+                </p>
+              </div>
+              <div className="text-right text-sm text-muted-foreground">
+                <p>{ratingCount} review{ratingCount === 1 ? "" : "s"}</p>
+                <p className="mt-1 text-xs text-primary">View all</p>
+              </div>
+            </button>
+          </div>
+
+          <div className="px-4 pt-4">
+            <Card className="p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-sm font-bold text-foreground">Financial summary</h2>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="rounded-xl bg-secondary/50 p-3">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Total earned</p>
+                  <p className="mt-1 font-bold text-foreground">{formatPi(profile.totalEarned ?? 0)}</p>
+                </div>
+                <div className="rounded-xl bg-secondary/50 p-3">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Total spent</p>
+                  <p className="mt-1 font-bold text-foreground">
+                    {financialLoading ? "…" : financialSummary ? formatPi(financialSummary.totalSpent) : "—"}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-secondary/50 p-3">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Locked as buyer</p>
+                  <p className="mt-1 font-bold text-foreground">
+                    {financialLoading ? "…" : financialSummary ? formatPi(financialSummary.lockedAsBuyer) : "—"}
+                  </p>
+                </div>
+                <div className="rounded-xl bg-secondary/50 p-3">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Owed to you</p>
+                  <p className="mt-1 font-bold text-foreground">
+                    {financialLoading ? "…" : financialSummary ? formatPi(financialSummary.owedToYou) : "—"}
+                  </p>
+                </div>
+                <div className="col-span-2 rounded-xl bg-secondary/50 p-3">
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Jobs completed</p>
+                  <p className="mt-1 font-bold text-foreground">{profile.jobsCompleted ?? 0}</p>
+                </div>
+              </div>
+            </Card>
+          </div>
+
+          {!adminStatusLoading && isAdmin && (
+            <div className="px-4 pt-4">
+              <button
+                type="button"
+                onClick={onOpenAdmin}
+                className="ps-press flex w-full items-center justify-between rounded-2xl border border-border bg-card p-3 text-left"
+              >
+                <div>
+                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Access</p>
+                  <p className="mt-1 text-base font-bold text-foreground">Admin</p>
+                </div>
+                <span className="text-sm text-primary">Open</span>
+              </button>
+            </div>
+          )}
+        </>
+      )}
 
       {editing ? (
         <div className="space-y-4 px-4 pt-4">
@@ -170,6 +307,21 @@ export function ProfileScreen({
           <Card className="bg-secondary/50 p-4">
             <p className="text-[11px] leading-relaxed text-muted-foreground">{DISCLAIMER}</p>
           </Card>
+
+          <div className="px-4 pt-2">
+            <div className="rounded-2xl border border-border bg-card p-3">
+              <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Legal</p>
+              <div className="mt-2 flex items-center justify-between gap-3 text-sm">
+                <Link href="/privacy" className="font-medium text-primary underline-offset-4 hover:underline">
+                  Privacy Policy
+                </Link>
+                <Link href="/terms" className="font-medium text-primary underline-offset-4 hover:underline">
+                  Terms of Service
+                </Link>
+              </div>
+            </div>
+          </div>
+
           <div className="px-4 pt-4">
             <Button variant="outline" className="w-full" onClick={() => void logout()}>
               Log out

@@ -1,0 +1,1 @@
+Get-ChildItem -Force | Where-Object { $_.Name -notin @("node_modules",".git","dist",".next",".vercel",".env.local","privkey.pem") } | Compress-Archive -DestinationPath "../Talse-app-source59.zip" -Force

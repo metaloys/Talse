@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { completePayment, getPayment } from "@/lib/pi-platform";
+import { finalizePaymentLock } from "@/lib/dispute-resolution";
 
 /**
  * Called from the client's Pi.createPayment onReadyForServerCompletion callback:
@@ -14,6 +16,10 @@ import { completePayment, getPayment } from "@/lib/pi-platform";
 export async function POST(req: NextRequest) {
   try {
     const me = await verifyPiToken(req.headers.get("authorization"));
+    // per-user rate limit for payment completions: 60 per hour
+    if (!(await checkRateLimit(`${me.uid}:payments:complete`, 60, 3600))) {
+      return NextResponse.json({ error: "Rate limit exceeded. Try again later." }, { status: 429 });
+    }
     const { paymentId, txid, hireRequestId } = await req.json();
     if (!paymentId || !txid || !hireRequestId) {
       return NextResponse.json({ error: "Missing paymentId, txid or hireRequestId" }, { status: 400 });
@@ -36,15 +42,8 @@ export async function POST(req: NextRequest) {
       await completePayment(paymentId, txid);
     }
 
-    const { data, error } = await supabaseAdmin
-      .from("hire_requests")
-      .update({ status: "locked", lock_txid: txid })
-      .eq("id", hireRequestId)
-      .select()
-      .single();
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ request: data });
+    const request = await finalizePaymentLock(hireRequestId, paymentId, txid);
+    return NextResponse.json({ request });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
     return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });

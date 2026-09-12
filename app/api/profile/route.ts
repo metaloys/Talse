@@ -5,12 +5,50 @@ import { sanitizeProfile, profileToBlob } from "@/lib/services/data";
 
 export async function GET(req: NextRequest) {
   try {
+    const targetUid = req.nextUrl.searchParams.get("uid")?.trim();
+
+    if (targetUid) {
+      const { data, error } = await supabaseAdmin
+        .from("profiles")
+        .select(
+          "pi_uid, username, display_name, bio, location, created_at, rating_avg, rating_count, jobs_completed, refunds_against_provider, total_earned"
+        )
+        .eq("pi_uid", targetUid)
+        .limit(1)
+        .single();
+
+      if (error && error.code !== "PGRST116") {
+        console.error("[GET /api/profile?uid] supabase error:", error);
+      }
+
+      if (!data) {
+        return NextResponse.json(sanitizeProfile({}), { status: 200 });
+      }
+
+      const out = sanitizeProfile({
+        piId: data.pi_uid,
+        name: data.display_name || data.username || "",
+        bio: data.bio || "",
+        location: data.location || "",
+        joinedAt: data.created_at ? new Date(data.created_at).getTime() : 0,
+        rating_avg: data.rating_avg,
+        rating_count: data.rating_count,
+        jobs_completed: data.jobs_completed,
+        refunds_against_provider: data.refunds_against_provider,
+        total_earned: data.total_earned,
+      });
+
+      return NextResponse.json(out);
+    }
+
     const auth = req.headers.get("authorization");
     const me = await verifyPiToken(auth);
 
     const { data, error } = await supabaseAdmin
       .from("profiles")
-      .select("pi_uid, username, display_name, bio, location, created_at")
+      .select(
+        "pi_uid, username, display_name, bio, location, created_at, rating_avg, rating_count, jobs_completed, refunds_against_provider, total_earned"
+      )
       .eq("pi_uid", me.uid)
       .limit(1)
       .single();
@@ -30,6 +68,11 @@ export async function GET(req: NextRequest) {
       bio: data.bio || "",
       location: data.location || "",
       joinedAt: data.created_at ? new Date(data.created_at).getTime() : 0,
+      rating_avg: data.rating_avg,
+      rating_count: data.rating_count,
+      jobs_completed: data.jobs_completed,
+      refunds_against_provider: data.refunds_against_provider,
+      total_earned: data.total_earned,
     });
 
     return NextResponse.json(out);

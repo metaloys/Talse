@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  APP_NAME,
   CATEGORY_MAP,
   DISCLAIMER,
   deliveryLabel,
@@ -9,6 +10,7 @@ import {
   serviceImage,
   type Service,
 } from "@/lib/services/data";
+import { getFrontendPlatformFeePercent, calcPlatformFee, BLOCKCHAIN_GAS_LABEL } from "@/lib/frontend-fee-config";
 import { useServices } from "@/contexts/services-context";
 import { Overlay } from "./feedback";
 import { Avatar, Button, Card, cx, IconButton, Pill } from "./ui";
@@ -21,6 +23,7 @@ import {
   IconShield,
 } from "./icons";
 import { hueFromString } from "@/lib/services/data";
+import { BoostListing } from "./boost-listing";
 
 export function ServiceDetail({
   service,
@@ -40,7 +43,7 @@ export function ServiceDetail({
 
   const persistedService = service ? getService(service.id) : undefined;
   if (!persistedService) return null;
-  service = persistedService;
+  service = persistedService as Service;
   const cat = CATEGORY_MAP[service.category];
   const provider = getProvider(service.ownerId);
   const images = service.images.length > 0 ? service.images : [""];
@@ -119,6 +122,21 @@ export function ServiceDetail({
             <span className="text-sm text-muted-foreground">starting price</span>
           </div>
 
+          <div className="mt-2 text-sm text-muted-foreground">
+            {(() => {
+              const pct = getFrontendPlatformFeePercent();
+              const fee = calcPlatformFee(service.price, pct);
+              const receive = Math.round((service.price - fee) * 100) / 100;
+              return (
+                <div>
+                  <div className="font-medium">You pay: {formatPi(service.price)}</div>
+                  <div className="text-xs">Platform fee ({Math.round(pct * 100)}%): -{formatPi(fee)} · You receive: {formatPi(receive)}</div>
+                  <div className="text-xs">{BLOCKCHAIN_GAS_LABEL}</div>
+                </div>
+              );
+            })()}
+          </div>
+
           <Card className="p-4">
             <h2 className="mb-1.5 text-sm font-bold text-foreground">About this service</h2>
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
@@ -128,7 +146,7 @@ export function ServiceDetail({
 
           {/* provider */}
           <button
-            onClick={() => onOpenProvider(provider?.id ?? service.ownerId)}
+            onClick={() => onOpenProvider(provider?.id ?? persistedService.ownerId)}
             className="ps-press flex w-full items-center gap-3 rounded-2xl border border-border bg-card p-3 text-left"
           >
             <Avatar name={provider?.name ?? service.ownerName} hue={hueFromString(provider?.name ?? service.ownerName)} size={44} />
@@ -142,13 +160,13 @@ export function ServiceDetail({
           <Card className="flex items-start gap-2.5 bg-secondary/60 p-3.5">
             <IconShield size={18} className="mt-0.5 shrink-0 text-primary" />
             <p className="text-xs leading-relaxed text-muted-foreground">
-              Agree on the details and terms with the provider before any work begins. Pi Services does not verify or
+              Agree on the details and terms with the provider before any work begins. {APP_NAME} does not verify or
               guarantee the trustworthiness of any user.
             </p>
           </Card>
 
           <button
-            onClick={() => pushToast("Report received. Thanks for helping keep Pi Services safe.", "info")}
+            onClick={() => pushToast(`Report received. Thanks for helping keep ${APP_NAME} safe.`, "info")}
             className="ps-press flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
           >
             <IconFlag size={14} />
@@ -167,7 +185,7 @@ export function ServiceDetail({
               <p className="text-[11px] text-muted-foreground">Price</p>
               <p className="text-base font-bold text-primary ps-nums">{formatPi(service.price)}</p>
             </div>
-            <Button className="flex-1" size="lg" onClick={() => onHire(service)}>
+            <Button className="flex-1" size="lg" onClick={() => onHire(persistedService)}>
               <IconSend size={18} />
               Hire
             </Button>
@@ -177,9 +195,7 @@ export function ServiceDetail({
       {isMine && (
         <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-card/95 px-4 py-3 ps-safe-bottom backdrop-blur">
           <div className="mx-auto max-w-md">
-            <p className="text-center text-xs text-muted-foreground">
-              This is your own listing. Edit or manage it from your profile.
-            </p>
+            <BoostListing listingId={service.id} />
           </div>
         </div>
       )}

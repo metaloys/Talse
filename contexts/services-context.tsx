@@ -10,6 +10,7 @@ import React, {
   type ReactNode,
 } from "react";
 import { usePiAuth } from "@/contexts/pi-auth-context";
+import { useRealtimeClient } from "@/contexts/realtime-client-context";
 import { backendApi } from "@/lib/backend-api";
 import {
   APP_NAME,
@@ -121,8 +122,24 @@ function mapBackendService(row: any): Service {
     images: row.images ?? [],
     active: row.active,
     createdAt: new Date(row.created_at).getTime(),
+    // Map boosted_until so client can sort the same way server does.
+    boostedUntil: row.boosted_until ? new Date(row.boosted_until).getTime() : 0,
     updatedAt: new Date(row.updated_at).getTime(),
+    ratingAvg: Number(row.profiles?.rating_avg ?? 0),
+    ratingCount: Number(row.profiles?.rating_count ?? 0),
+    jobsCompleted: Number(row.profiles?.jobs_completed ?? 0),
+    refundsAgainstProvider: Number(row.profiles?.refunds_against_provider ?? 0),
+    totalEarned: Number(row.profiles?.total_earned ?? 0),
   };
+}
+
+function compareServices(a: Service, b: Service) {
+  // Server orders: boosted_until desc, created_at desc
+  const aBoost = a.boostedUntil ?? 0;
+  const bBoost = b.boostedUntil ?? 0;
+  if (aBoost !== bBoost) return bBoost - aBoost;
+  if (a.createdAt !== b.createdAt) return b.createdAt - a.createdAt;
+  return a.id.localeCompare(b.id);
 }
 
 function mapBackendRequest(row: any, currentUid: string | null): HireRequest {
@@ -165,6 +182,7 @@ function mapBackendMessage(row: any): ConversationMessage {
     providerPiId: "",
     senderPiId: row.sender_uid,
     text: row.text,
+    attachments: Array.isArray(row.attachments) ? row.attachments : [],
     createdAt: new Date(row.created_at).getTime(),
   };
 }
@@ -205,6 +223,9 @@ interface ServicesContextType {
   toggleServiceActive: (id: string) => Promise<void>;
   deleteService: (id: string) => Promise<void>;
   refreshServices: () => Promise<void>;
+  loadMoreServices: () => Promise<void>;
+  hasMore: boolean;
+  loadedPages: number;
 
   getProvider: (id: string) => PublicProvider | undefined;
   servicesByProvider: (id: string) => Service[];
@@ -219,8 +240,8 @@ interface ServicesContextType {
 
   messages: ConversationMessage[];
   messagesForRequest: (hireRequestId: string) => ConversationMessage[];
-  sendMessage: (hireRequestId: string, text: string) => Promise<void>;
-  loadMessagesForRequest: (hireRequestId: string) => Promise<void>;
+  sendMessage: (hireRequestId: string, text: string, attachments?: string[]) => Promise<void>;
+  loadMessagesForRequest: (hireRequestId: string, before?: string | number) => Promise<{ fetched: number; hasMore?: boolean }>;
 
   toasts: Toast[];
   pushToast: (text: string, tone?: Toast["tone"]) => void;
@@ -253,6 +274,18 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
 
   const [toasts, setToasts] = useState<Toast[]>([]);
+
+  // Pagination state (client-side): perPage is configurable client-side but
+  // server enforces a hard cap of 50. loadedPages tracks how many pages the
+  // user has loaded (1 = first page). Use refs to avoid unnecessary re-renders.
+  const perPageRef = useRef<number>(20);
+  const loadedPagesRef = useRef<number>(1);
+  const hasMoreRef = useRef<boolean>(true);
+  const [hasMore, setHasMore] = useState<boolean>(true);
+  const [loadedPages, setLoadedPages] = useState<number>(1);
+  // Serialize concurrent writers to `listings` to avoid interleaved updates.
+  // If a sync is in progress, further requests will skip.
+  const isSyncingRef = useRef<boolean>(false);
 
   const profileRef = useRef(profile);
   profileRef.current = profile;
@@ -294,21 +327,82 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
   // ---- backend loaders ----
   const refreshServices = async () => {
     try {
-      const { services } = await backendApi.services.list();
-      setListings(services.map(mapBackendService));
+      // reset to first page
+      loadedPagesRef.current = 1;
+      const perPage = perPageRef.current;
+      const res = await backendApi.services.list({ page: 1, perPage });
+      // Owner-path responses remain unpaginated ({ services: [...] })
+      if ((res as any).page === undefined) {
+        const services = (res as any).services ?? [];
+        setListings(services.map(mapBackendService));
+        hasMoreRef.current = false;
+        return;
+      }
+      const pag = res as { services: any[]; page: number; perPage: number; total: number; hasMore: boolean };
+      setListings((pag.services ?? []).map(mapBackendService));
+      hasMoreRef.current = !!pag.hasMore;
+      setHasMore(hasMoreRef.current);
+      loadedPagesRef.current = 1;
+      setLoadedPages(1);
     } catch (err) {
       console.error("[Services] Failed to load services:", err);
       setStorageTrouble(true);
     }
   };
 
+  const loadMoreServices = async () => {
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+    try {
+      if (!hasMoreRef.current) return;
+      const nextPage = loadedPagesRef.current + 1;
+      const perPage = perPageRef.current;
+      const res = await backendApi.services.list({ page: nextPage, perPage });
+      // Owner-path responses should not be using loadMore; guard anyway
+      if ((res as any).page === undefined) return;
+      const pag = res as { services: any[]; page: number; perPage: number; total: number; hasMore: boolean };
+      const newServices = (pag.services ?? []).map(mapBackendService);
+      setListings((prev) => {
+        // Merge and dedupe by id, preferring the later items (newServices).
+        const combined = [...prev, ...newServices];
+        const byId = new Map<string, Service>();
+        for (const s of combined) byId.set(s.id, s);
+        const merged = Array.from(byId.values()).sort(compareServices);
+        // update published refs/states
+        hasMoreRef.current = !!pag.hasMore;
+        loadedPagesRef.current = nextPage;
+        setHasMore(hasMoreRef.current);
+        setLoadedPages(loadedPagesRef.current);
+        return merged;
+      });
+      
+    } catch (err) {
+      console.error("[Services] Failed to load more services:", err);
+    } finally {
+      isSyncingRef.current = false;
+    }
+  };
+
   const refreshRequests = async () => {
     if (!accessToken) return;
     try {
-      const [{ requests: outReqs }, { requests: inReqs }] = await Promise.all([
-        backendApi.hireRequests.listMine("outgoing", accessToken),
-        backendApi.hireRequests.listMine("incoming", accessToken),
-      ]);
+      const perPage = perPageRef.current;
+
+      const fetchAllForRole = async (role: "outgoing" | "incoming") => {
+        let page = 1;
+        let all: any[] = [];
+        while (true) {
+          const res = await backendApi.hireRequests.listMine(role, accessToken, { page, perPage });
+          const chunk = (res as any).requests ?? [];
+          all = all.concat(chunk);
+          const hasMore = (res as any).hasMore === true;
+          if (!hasMore) break;
+          page += 1;
+        }
+        return all;
+      };
+
+      const [outReqs, inReqs] = await Promise.all([fetchAllForRole("outgoing"), fetchAllForRole("incoming")]);
       const merged = [...outReqs, ...inReqs].map((r) => mapBackendRequest(r, piUser?.uid ?? null));
       const byId = new Map(merged.map((r) => [r.id, r]));
       setRequests(Array.from(byId.values()));
@@ -317,14 +411,154 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const loadMessagesForRequest = async (hireRequestId: string) => {
-    if (!accessToken) return;
+    const realtimeClient = useRealtimeClient();
+
+    const refreshRequestsRef = useRef(refreshRequests);
+    useEffect(() => {
+      refreshRequestsRef.current = refreshRequests;
+    });
+
+    const loadMessagesForRequestRef = useRef<typeof loadMessagesForRequest | null>(null);
+    useEffect(() => {
+      loadMessagesForRequestRef.current = loadMessagesForRequest;
+    });
+
+    const requestIdsKey = useMemo(
+      () => requests.map((r) => r.id).sort().join(","),
+      [requests]
+    );
+
+    const channelsRef = useRef<Map<string, ReturnType<typeof realtimeClient.channel>>>(new Map());
+
+    useEffect(() => {
+      const currentIds = new Set(requestIdsKey ? requestIdsKey.split(",") : []);
+      const existing = channelsRef.current;
+
+      for (const id of currentIds) {
+        if (!existing.has(id)) {
+          const channel = realtimeClient.channel(`hire_request:${id}`, {
+            config: { private: true },
+          });
+          channel.on("broadcast", { event: "*" }, (ev: any) => {
+            try {
+              const evName = ev?.event ?? ev?.type ?? null;
+              const payload = ev?.payload ?? ev?.data ?? ev?.body ?? null;
+              if (evName === "message_added") {
+                const hireRequestId = payload?.hire_request_id ?? payload?.hireRequestId ?? payload?.hire_request ?? payload?.hireRequest ?? null;
+                if (hireRequestId) {
+                  // Use ref to avoid stale closure
+                  loadMessagesForRequestRef.current?.(hireRequestId);
+                  return;
+                }
+              }
+            } catch (err) {
+              // fall back to full refresh on any unexpected payload shape
+            }
+            refreshRequestsRef.current();
+          });
+          channel.subscribe();
+          existing.set(id, channel);
+        }
+      }
+
+      for (const [id, channel] of existing) {
+        if (!currentIds.has(id)) {
+          channel.unsubscribe();
+          existing.delete(id);
+        }
+      }
+    }, [requestIdsKey, realtimeClient]);
+
+    // ---- global services-feed subscription (single public channel) ----
+    const refreshServicesRef = useRef(refreshServices);
+    useEffect(() => {
+      refreshServicesRef.current = refreshServices;
+    });
+
+    // Re-fetch the set of currently-loaded pages (used by realtime updates).
+    const reFetchLoadedPages = async () => {
+      if (isSyncingRef.current) return;
+      isSyncingRef.current = true;
+      try {
+        const pages = loadedPagesRef.current || 1;
+        if (pages <= 1) {
+          await refreshServices();
+          return;
+        }
+        const perPage = perPageRef.current;
+        const byId = new Map<string, any>();
+        for (let p = 1; p <= pages; p++) {
+          const res = await backendApi.services.list({ page: p, perPage });
+          const chunk = (res as any).services ?? [];
+          for (const row of chunk) {
+            // keep last-seen row for this id (overwrite duplicates)
+            byId.set(row.id, row);
+          }
+        }
+        const merged = Array.from(byId.values()).map(mapBackendService).sort(compareServices);
+        setListings(merged);
+      } catch (err) {
+        console.error("[Services] Failed to re-fetch loaded pages:", err);
+      } finally {
+        isSyncingRef.current = false;
+      }
+    };
+    const reFetchLoadedPagesRef = useRef(reFetchLoadedPages);
+    useEffect(() => {
+      reFetchLoadedPagesRef.current = reFetchLoadedPages;
+    });
+
+    useEffect(() => {
+      // create a single, persistent public channel for service feed updates
+      const servicesChannel = realtimeClient.channel("services-feed", { config: { private: false } });
+      servicesChannel.on("broadcast", { event: "*" }, () => {
+        // signal-only: re-fetch the currently-loaded pages so users who
+        // scrolled to page N stay on page N (not truncated back to page 1).
+        reFetchLoadedPagesRef.current();
+      });
+      servicesChannel.subscribe();
+
+      return () => {
+        try {
+          servicesChannel.unsubscribe();
+        } catch (err) {
+          // ignore
+        }
+      };
+    }, [realtimeClient]);
+
+    useEffect(() => {
+      return () => {
+        for (const channel of channelsRef.current.values()) {
+          channel.unsubscribe();
+        }
+        channelsRef.current.clear();
+      };
+    }, []);
+
+  const loadMessagesForRequest = async (hireRequestId: string, before?: string | number) => {
+    if (!accessToken) return { fetched: 0 };
     try {
-      const { messages: msgs } = await backendApi.messages.list(hireRequestId, accessToken);
-      const mapped = msgs.map(mapBackendMessage);
-      setMessages((prev) => [...prev.filter((m) => m.hireRequestId !== hireRequestId), ...mapped]);
+      const limit = 50;
+      const params: any = { limit };
+      if (before) params.before = String(before);
+      const { messages: msgs, hasMore } = await backendApi.messages.list(hireRequestId, accessToken, params as any);
+      const mapped = (msgs ?? []).map(mapBackendMessage);
+      setMessages((prev) => {
+        const others = prev.filter((m) => m.hireRequestId !== hireRequestId);
+        const existingFor = prev.filter((m) => m.hireRequestId === hireRequestId).sort((a, b) => a.createdAt - b.createdAt);
+        if (before) {
+          // mapped contains older messages (ascending); merge them before existing
+          const merged = [...mapped, ...existingFor];
+          return [...others, ...merged];
+        }
+        // replace with latest page
+        return [...others, ...mapped];
+      });
+      return { fetched: (mapped ?? []).length, hasMore: !!hasMore };
     } catch (err) {
       console.error("[Services] Failed to load messages:", err);
+      return { fetched: 0 };
     }
   };
 
@@ -561,11 +795,11 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
   };
 
   // ---- messages (now backend-backed) ----
-  const sendMessage = async (hireRequestId: string, text: string): Promise<void> => {
+  const sendMessage = async (hireRequestId: string, text: string, attachments: string[] = []): Promise<void> => {
     const token = requireAuth();
     const messageText = cleanMultiline(text, 2000);
     if (!messageText) return;
-    const { message } = await backendApi.messages.send(hireRequestId, messageText, token);
+    const { message } = await backendApi.messages.send(hireRequestId, messageText, token, attachments.length ? attachments : undefined);
     setMessages((prev) => [...prev, mapBackendMessage(message)]);
   };
 
@@ -598,11 +832,28 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
         location: p.location,
         joinedAt: p.joinedAt || Date.now(),
         isMe: true,
+            ratingAvg: p.ratingAvg ?? 0,
+            ratingCount: p.ratingCount ?? 0,
+            jobsCompleted: p.jobsCompleted ?? 0,
+            refundsAgainstProvider: p.refundsAgainstProvider ?? 0,
+            totalEarned: p.totalEarned ?? 0,
       };
     }
     const service = listings.find((item) => item.ownerId === id && item.active);
     return service
-      ? { id, name: service.ownerName, bio: "", location: "", joinedAt: service.createdAt, isMe: false }
+      ? {
+          id,
+          name: service.ownerName,
+          bio: "",
+          location: "",
+          joinedAt: service.createdAt,
+          isMe: false,
+          ratingAvg: service.ratingAvg ?? 0,
+          ratingCount: service.ratingCount ?? 0,
+          jobsCompleted: 0,
+          refundsAgainstProvider: 0,
+          totalEarned: 0,
+        }
       : undefined;
   };
 
@@ -628,6 +879,9 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
     toggleServiceActive,
     deleteService,
     refreshServices,
+    loadMoreServices,
+    hasMore,
+    loadedPages,
     getProvider,
     servicesByProvider,
     requests,

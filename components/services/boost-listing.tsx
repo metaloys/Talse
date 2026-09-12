@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePiAuth } from "@/contexts/pi-auth-context";
+import { APP_NAME } from "@/lib/services/data";
 import { PRODUCT_CONFIG } from "@/lib/product-config";
 import type { SDKLiteError } from "@/lib/sdklite-types";
 import { backendApi } from "@/lib/backend-api";
@@ -30,6 +31,49 @@ export function BoostListing({ listingId }: { listingId: string }) {
   const amount = product?.price_in_pi;
   const productSlug = product?.slug;
   const unavailable = !product || !productSlug || !sdk;
+
+  // Reconciliation: if Pi's restored purchases show this product as owned
+  // but our backend's `boosted_until` isn't set / is expired, attempt to
+  // confirm the boost on the backend using the purchase data from SDK.
+  useEffect(() => {
+    let cancelled = false;
+    const tryReconcile = async () => {
+      if (!accessToken || !productSlug) return;
+      const restored = restoredPurchases?.find((p) => p.productId === productSlug && (p as any).quantity > 0) as any | undefined;
+      if (!restored) return;
+
+      // The SDK's `restore()` / `purchases()` response is `UserPurchaseBalance[]`
+      // (see lib/sdklite-types.ts) and only guarantees `productId` + `quantity`.
+      // If the restored entry contains `paymentId`/`txid` fields (some SDKs
+      // may include richer metadata), use them to reconcile. Otherwise we
+      // cannot confirm the payment server-side and must skip reconciliation.
+      const paymentId = restored.paymentId ?? restored.payment_id ?? restored.payment?.paymentId ?? (restored as any).paymentId;
+      const txid = restored.txid ?? restored.tx_id ?? restored.payment?.txid ?? (restored as any).txid;
+
+      if (!paymentId) {
+        // nothing we can do without a server-side payment identifier
+        // keep this silent — it's informational for debugging
+        console.debug("[Boost] Restored purchase found but missing paymentId; cannot reconcile automatically.", { restored });
+        return;
+      }
+
+      try {
+        await backendApi.services.confirmBoost(listingId, paymentId, txid ?? "", accessToken);
+        if (cancelled) return;
+        await refreshServices();
+        console.debug("[Boost] Reconciled restored purchase for", listingId, paymentId);
+      } catch (err) {
+        // swallow errors — reconciliation is best-effort and should not
+        // surface to the user (they already paid).
+        console.error("[Boost] Reconciliation attempt failed:", err);
+      }
+    };
+
+    void tryReconcile();
+    return () => {
+      cancelled = true;
+    };
+  }, [restoredPurchases, productSlug, accessToken, listingId, refreshServices]);
 
   const purchase = async () => {
     if (unavailable || busy) return;
@@ -98,7 +142,7 @@ export function BoostConfirmation({ serviceId, onDone }: { serviceId: string; on
     <div className="mx-auto max-w-md space-y-4 p-4 pb-8">
       <div className="rounded-2xl bg-primary-soft p-5 text-center">
         <p className="text-2xl font-bold text-primary">Service published</p>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Your listing is now available to Pioneers browsing Pi Services.</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Your listing is now available to Pioneers browsing {APP_NAME}.</p>
       </div>
       <BoostListing listingId={serviceId} />
       <Button variant="outline" className="w-full" onClick={onDone}>View my profile</Button>

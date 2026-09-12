@@ -1,20 +1,51 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { MESSAGE_MAX } from "@/lib/services/data";
+import { isAdmin } from "@/lib/admin";
 
 // GET /api/reviews?provider=<uid>
 export async function GET(req: NextRequest) {
   const provider = new URL(req.url).searchParams.get("provider");
   if (!provider) return NextResponse.json({ error: "Missing provider" }, { status: 400 });
 
-  const { data, error } = await supabaseAdmin
+  const includeHiddenRequested = new URL(req.url).searchParams.get("includeHidden") === "true";
+  let includeHidden = false;
+
+  if (includeHiddenRequested) {
+    try {
+      const me = await verifyPiToken(req.headers.get("authorization"));
+      const isSelf = me.uid === provider;
+      includeHidden = isSelf || isAdmin(me.uid);
+    } catch {
+      includeHidden = false;
+    }
+  }
+
+  let query = supabaseAdmin
     .from("reviews")
-    .select("*")
+    .select("id, hire_request_id, reviewer_uid, provider_uid, rating, text, created_at, hidden_at, reviewer:profiles!reviews_reviewer_uid_fkey(display_name, username)")
     .eq("provider_uid", provider)
     .order("created_at", { ascending: false });
 
+  if (!includeHidden) {
+    query = query.is("hidden_at", null);
+  }
+
+  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ reviews: data });
+
+  const out = (data || []).map((r: any) => ({
+    ...r,
+    reviewer_name: r.reviewer?.display_name || r.reviewer?.username || r.reviewer_uid,
+  }));
+
+  if (!includeHidden) {
+    return NextResponse.json({ reviews: out.map(({ hidden_at, ...rest }) => rest) });
+  }
+
+  return NextResponse.json({ reviews: out });
 }
 
 // POST /api/reviews — buyer leaves a review; only allowed once, only after
@@ -22,12 +53,19 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const me = await verifyPiToken(req.headers.get("authorization"));
+    // per-user rate limit for creating reviews: 20 per day
+    if (!(await checkRateLimit(`${me.uid}:reviews:create`, 20, 24 * 3600))) {
+      return NextResponse.json({ error: "Rate limit exceeded. Try again later." }, { status: 429 });
+    }
     const { hireRequestId, rating, text } = await req.json();
     if (!hireRequestId || !rating) {
       return NextResponse.json({ error: "Missing hireRequestId or rating" }, { status: 400 });
     }
     if (rating < 1 || rating > 5) {
       return NextResponse.json({ error: "Rating must be 1-5" }, { status: 400 });
+    }
+    if (typeof text === "string" && text.trim().length > MESSAGE_MAX) {
+      return NextResponse.json({ error: `Review text must be at most ${MESSAGE_MAX} characters.` }, { status: 400 });
     }
 
     const { data: hr, error: fetchErr } = await supabaseAdmin

@@ -1,23 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import type { CategoryId, Service, TabId } from "@/lib/services/data";
 import { ServicesProvider, useServices } from "@/contexts/services-context";
 import { LoadingScreen, StorageNotice, ToastHost } from "./feedback";
 import { BottomNav } from "./bottom-nav";
 import { HomeScreen } from "./home-screen";
-import { CategoriesScreen } from "./categories-screen";
 import { SearchScreen } from "./search-screen";
+import { MessagesScreen } from "./messages-screen";
 import { ActivityScreen } from "./activity-screen";
 import { ProfileScreen } from "./profile-screen";
+import { ReviewsScreen } from "./reviews-screen";
 import { ServiceDetail } from "./service-detail";
 import { HireForm } from "./hire-form";
 import { CreateService } from "./create-service";
 import { ProviderProfile } from "./provider-profile";
 import { AdminPanel } from "./admin-panel";
 import { DisputeResolution } from "./dispute-resolution";
+import { Overlay } from "./feedback";
 
-function AppInner() {
+function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request"; id: string } | null }) {
   const { ready, storageTrouble, toasts, dismissToast, incoming, getService } = useServices();
 
   const [tab, setTab] = useState<TabId>("home");
@@ -38,12 +40,26 @@ function AppInner() {
 
   const [providerId, setProviderId] = useState<string | null>(null);
   const [providerOpen, setProviderOpen] = useState(false);
+  const [reviewsOpen, setReviewsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [disputesOpen, setDisputesOpen] = useState(false);
+  const [disputeRequestId, setDisputeRequestId] = useState<string | null>(null);
+
+  // Handle a minimal deep-link: if initialDeepLink.type === 'hire-request',
+  // switch to the activity tab and forward the id to ActivityScreen so it
+  // can expand the corresponding request if available.
+  const [initialOpenRequestId, setInitialOpenRequestId] = useState<string | null>(null);
+  const [messagesDeepLinkId, setMessagesDeepLinkId] = useState<string | null>(null);
+  useEffect(() => {
+    if (initialDeepLink && initialDeepLink.type === "hire-request") {
+      setTab("activity");
+      setInitialOpenRequestId(initialDeepLink.id);
+    }
+  }, [initialDeepLink]);
 
   if (!ready) return <LoadingScreen />;
   if (adminOpen) return <AdminPanel onExit={() => setAdminOpen(false)} />;
-  if (disputesOpen) return <DisputeResolution onClose={() => setDisputesOpen(false)} />;
+  if (disputesOpen) return <DisputeResolution onClose={() => { setDisputesOpen(false); setDisputeRequestId(null); }} requestId={disputeRequestId ?? undefined} />;
 
   const openService = (s: Service) => {
     setDetailService(s);
@@ -87,7 +103,6 @@ function AppInner() {
     <div className="min-h-screen bg-background">
       <StorageNotice show={storageTrouble} />
       <ToastHost toasts={toasts} onDismiss={dismissToast} />
-      <div className="fixed right-3 top-3 z-30 flex gap-2"><button type="button" onClick={() => setDisputesOpen(true)} className="rounded-full border border-border bg-card/90 px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground shadow-sm backdrop-blur">Disputes</button><button type="button" onClick={() => setAdminOpen(true)} className="rounded-full border border-border bg-card/90 px-2.5 py-1.5 text-[10px] font-semibold text-muted-foreground shadow-sm backdrop-blur">Admin</button></div>
 
       {tab === "home" && (
         <HomeScreen
@@ -97,7 +112,6 @@ function AppInner() {
           onSeeAll={seeAll}
         />
       )}
-      {tab === "categories" && <CategoriesScreen onOpenCategory={openCategory} />}
       {tab === "search" && (
         <SearchScreen
           presetCategory={presetCategory}
@@ -105,9 +119,23 @@ function AppInner() {
           onOpenService={openService}
         />
       )}
-      {tab === "activity" && <ActivityScreen onBrowse={() => setTab("search")} />}
+      {tab === "activity" && (
+        <ActivityScreen
+          onBrowse={() => setTab("search")}
+          initialOpenRequestId={initialOpenRequestId}
+          onOpenMessages={(requestId) => { setMessagesDeepLinkId(requestId); setTab("messages"); }}
+          onViewDispute={(requestId) => { setDisputeRequestId(requestId); setDisputesOpen(true); }}
+        />
+      )}
+      {tab === "messages" && <MessagesScreen initialRequestId={messagesDeepLinkId ?? undefined} />}
       {tab === "profile" && (
-        <ProfileScreen onCreate={openCreate} onEditService={openEdit} onOpenService={openService} />
+        <ProfileScreen
+          onCreate={openCreate}
+          onEditService={openEdit}
+          onOpenService={openService}
+          onOpenReviews={() => setReviewsOpen(true)}
+          onOpenAdmin={() => setAdminOpen(true)}
+        />
       )}
 
       <BottomNav
@@ -149,6 +177,12 @@ function AppInner() {
         }}
       />
 
+      <Overlay open={reviewsOpen} onClose={() => setReviewsOpen(false)} title="My reviews">
+        <div className="mx-auto max-w-md p-4 pb-10">
+          <ReviewsScreen />
+        </div>
+      </Overlay>
+
       <ProviderProfile
         providerId={providerId}
         open={providerOpen}
@@ -164,10 +198,10 @@ function AppInner() {
   );
 }
 
-export function ServicesApp() {
+export function ServicesApp({ initialDeepLink }: { initialDeepLink?: { type: "hire-request"; id: string } | null } = {}) {
   return (
     <ServicesProvider>
-      <AppInner />
+      <AppInner initialDeepLink={initialDeepLink} />
     </ServicesProvider>
   );
 }

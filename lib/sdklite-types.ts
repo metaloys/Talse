@@ -79,6 +79,7 @@ export interface PiPaymentData {
 
 export interface PiPaymentCallbacks {
   onReadyForServerApproval: (paymentId: string) => void;
+  onIncompletePaymentFound?: (payment: unknown) => void | Promise<void>;
   onReadyForServerCompletion: (paymentId: string, txid: string) => void;
   onCancel: (paymentId: string) => void;
   onError: (error: unknown, payment?: unknown) => void;

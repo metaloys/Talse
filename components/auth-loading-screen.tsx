@@ -11,10 +11,10 @@ export function AuthLoadingScreen() {
         <div className="flex justify-center">
           {hasError ? (
             <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center">
-              <svg
+                <svg
                 className="w-10 h-10 text-destructive"
                 fill="none"
-                strokeWidth="2"
+                strokeWidth={2}
                 stroke="currentColor"
                 viewBox="0 0 24 24"
               >

@@ -6,8 +6,8 @@ import { AppWrapper } from "@/components/app-wrapper";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Made with App Studio",
-  description: "Discover, offer, and hire services from fellow Pioneers with Pi.",
+  title: "Talse",
+  description: "Talse — discover, offer, and hire services from fellow Pioneers with Pi.",
     generator: 'v0.app'
 };
 

@@ -8,4 +8,8 @@ export const PI_NETWORK_CONFIG = {
     sandboxOverride === undefined
       ? process.env.NODE_ENV !== "production"
       : sandboxOverride === "true",
+  PI_API_BASE:
+    sandboxOverride === "true" || (sandboxOverride === undefined && process.env.NODE_ENV !== "production")
+      ? process.env.PI_SANDBOX_API_BASE ?? "https://api.testnet.minepi.com/v2"
+      : process.env.PI_PRODUCTION_API_BASE ?? "https://api.minepi.com/v2",
 } as const;

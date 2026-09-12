@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   CATEGORIES,
   DELIVERY_OPTIONS,
@@ -15,6 +15,7 @@ import {
   type SortId,
 } from "@/lib/services/data";
 import { useServices } from "@/contexts/services-context";
+import { backendApi } from "@/lib/backend-api";
 import { Button, cx, EmptyState, IconButton } from "./ui";
 import { CategoryIcon, IconClose, IconInbox, IconSearch, IconSliders } from "./icons";
 import { ServiceCard } from "./service-card";
@@ -29,6 +30,9 @@ export function SearchScreen({
   onOpenService: (s: Service) => void;
 }) {
   const { allServices } = useServices();
+  const [serverRows, setServerRows] = useState<any[] | null>(null);
+  const [serverLoading, setServerLoading] = useState(false);
+  const requestSeq = useRef(0);
 
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<CategoryId | "all">("all");
@@ -49,8 +53,43 @@ export function SearchScreen({
   const activeFilters =
     (category !== "all" ? 1 : 0) + (band !== "any" ? 1 : 0) + (delivery !== "any" ? 1 : 0);
 
+  const isSearchActive = !!query || category !== "all";
+
   const results = useMemo(() => {
-    let list = allServices.filter((s) => matchesQuery(s, query));
+    let base: Service[] = [];
+    if (isSearchActive) {
+      // Use server-provided page (up to 50 items) for query results.
+      if (!serverRows) base = [];
+      else base = serverRows.map((row) => {
+        return {
+          id: row.id,
+          ownerId: row.owner_uid,
+          ownerName: row.profiles?.display_name || row.profiles?.username || "Provider",
+          title: row.title,
+          category: row.category,
+          description: row.description,
+          price: Number(row.price),
+          deliveryId: row.delivery_id,
+          images: row.images ?? [],
+          active: row.active,
+          createdAt: new Date(row.created_at).getTime(),
+          updatedAt: new Date(row.updated_at).getTime(),
+          boostedUntil: row.boosted_until ? new Date(row.boosted_until).getTime() : 0,
+          ratingAvg: Number(row.profiles?.rating_avg ?? 0),
+          ratingCount: Number(row.profiles?.rating_count ?? 0),
+          jobsCompleted: Number(row.profiles?.jobs_completed ?? 0),
+          refundsAgainstProvider: Number(row.profiles?.refunds_against_provider ?? 0),
+          totalEarned: Number(row.profiles?.total_earned ?? 0),
+        } as Service;
+      });
+    } else {
+      base = allServices;
+    }
+
+    let list = base;
+    if (!isSearchActive) {
+      list = base.filter((s) => matchesQuery(s, query));
+    }
     if (category !== "all") list = list.filter((s) => s.category === category);
     if (band !== "any") list = list.filter((s) => inPriceBand(s.price, band));
     if (delivery !== "any") list = list.filter((s) => deliveryDays(s.deliveryId) <= delivery);
@@ -61,7 +100,35 @@ export function SearchScreen({
     else if (sort === "fastest") sorted.sort((a, b) => deliveryDays(a.deliveryId) - deliveryDays(b.deliveryId));
     else sorted.sort((a, b) => b.createdAt - a.createdAt);
     return sorted;
-  }, [allServices, query, category, band, delivery, sort]);
+  }, [allServices, serverRows, serverLoading, query, category, band, delivery, sort, isSearchActive]);
+
+  useEffect(() => {
+    if (!isSearchActive) {
+      requestSeq.current += 1;
+      setServerRows(null);
+      setServerLoading(false);
+      return;
+    }
+
+    const requestId = ++requestSeq.current;
+    setServerLoading(true);
+    setServerRows(null);
+
+    backendApi.services
+      .list({ q: query || undefined, category: category === "all" ? undefined : category, perPage: 50 })
+      .then((res: any) => {
+        if (requestId !== requestSeq.current) return;
+        setServerRows((res && (res.services || res.services === null)) ? (res.services || []) : []);
+      })
+      .catch(() => {
+        if (requestId !== requestSeq.current) return;
+        setServerRows([]);
+      })
+      .finally(() => {
+        if (requestId !== requestSeq.current) return;
+        setServerLoading(false);
+      });
+  }, [query, category, isSearchActive]);
 
   const clearFilters = () => {
     setCategory("all");
@@ -73,6 +140,17 @@ export function SearchScreen({
     <div className="mx-auto max-w-md pb-24">
       <div className="ps-hero-grad px-4 pb-4 pt-4 ps-safe-top">
         <h1 className="text-2xl font-bold text-foreground">Find services</h1>
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          <Chip active={category === "all"} onClick={() => setCategory("all")}>
+            All
+          </Chip>
+          {CATEGORIES.map((c) => (
+            <Chip key={c.id} active={category === c.id} onClick={() => setCategory(c.id)}>
+              <CategoryIcon id={c.id} size={13} />
+              {c.short}
+            </Chip>
+          ))}
+        </div>
         <div className="mt-3 flex gap-2">
           <div className="relative flex-1">
             <IconSearch size={18} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -175,7 +253,13 @@ export function SearchScreen({
           </div>
         </div>
 
-        {results.length === 0 ? (
+        {isSearchActive && serverLoading && serverRows === null ? (
+          <EmptyState
+            icon={<IconSearch size={26} />}
+            title="Searching services…"
+            message="Looking for matches from the live server results."
+          />
+        ) : results.length === 0 ? (
           <EmptyState
             icon={<IconInbox size={26} />}
             title="No services found"

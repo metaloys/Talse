@@ -132,6 +132,7 @@ interface PiAuthContextType {
    *  api.minepi.com/v2/me. Distinct from whatever @swetate/auth does. */
   accessToken: string | null;
   piUser: { uid: string; username: string } | null;
+  realtimeToken: string | null;
 }
 
 const PiAuthContext = createContext<PiAuthContextType | undefined>(undefined);
@@ -204,14 +205,16 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     UserPurchaseBalance[] | null
   >(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
+  const [realtimeToken, setRealtimeToken] = useState<string | null>(null);
   const [piUser, setPiUser] = useState<{ uid: string; username: string } | null>(null);
 
   const fetchProducts = async (sdkInstance: SDKLiteInstance): Promise<void> => {
     try {
       const { products } = await sdkInstance.state.products();
+      console.log("[Boost-Diagnostic] raw products() response:", JSON.stringify(products, null, 2));
       setProducts(products);
     } catch (e) {
-      console.error("Failed to load products:", e);
+      console.error("[Boost-Diagnostic] products() call threw:", e);
       setProducts([]);
     }
   };
@@ -256,14 +259,19 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       // user has a payment from a previous session that never completed.
       setAuthMessage("Authenticating with Pi...");
       const authResult = await window.Pi.authenticate(
-        ["username", "payments", "wallet_address"],
+        ["username", "payments", "wallet_address", "in_app_notifications"],
         (payment: any) => {
           // An incomplete payment from a prior session. In production, POST
           // this to /api/payments/complete (or /cancel) so it isn't stuck.
           console.warn("[PiAuth] Incomplete payment found:", payment);
         }
       );
+      // Keep the Pi access token in memory for authenticated API calls
+      // and to drive the periodic realtime-token refresh loop below.
+      // This state is required for normal operation (not temporary).
       setAccessToken(authResult.accessToken);
+      // Fire-and-forget fetch for a short-lived Supabase-compatible realtime token.
+      fetchRealtimeToken(authResult.accessToken).then(setRealtimeToken);
       setPiUser(authResult.user);
       setIsAuthenticated(true);
 
@@ -310,9 +318,34 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  async function fetchRealtimeToken(piAccessToken: string): Promise<string | null> {
+    try {
+      const res = await fetch("/api/auth/realtime-token", {
+        headers: { Authorization: `Bearer ${piAccessToken}` },
+      });
+      if (!res.ok) {
+        console.error("[PiAuth] realtime-token fetch failed:", res.status);
+        return null;
+      }
+      const data = await res.json();
+      return typeof data.token === "string" ? data.token : null;
+    } catch (err) {
+      console.error("[PiAuth] realtime-token fetch error:", err);
+      return null;
+    }
+  }
+
   useEffect(() => {
     initialize();
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !accessToken) return;
+    const interval = setInterval(() => {
+      fetchRealtimeToken(accessToken).then(setRealtimeToken);
+    }, 8 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [isAuthenticated, accessToken]);
 
   const logout = async () => {
     // Reset in-memory auth state so the next authenticate() call prompts again.
@@ -335,6 +368,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     restoredPurchases,
     reinitialize: initialize,
     accessToken,
+    realtimeToken,
     piUser,
     logout,
   };

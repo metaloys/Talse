@@ -71,7 +71,7 @@ export function CreateService({
 
   const titleError = title.trim().length < 3 ? "Give your service a clear title (min 3 characters)." : "";
   const priceValue = parsePrice(price);
-  const priceError = priceValue <= 0 ? "Enter a price in Pi greater than 0." : "";
+  const priceError = priceValue < 1 ? "Minimum listing price is 1 Pi." : "";
   const descError = description.trim().length < 10 ? "Add a short description (min 10 characters)." : "";
   const canSave = !titleError && !priceError && !descError;
 

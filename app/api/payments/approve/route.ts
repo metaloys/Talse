@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { approvePayment, getPayment } from "@/lib/pi-platform";
 
 /**
@@ -14,6 +15,10 @@ import { approvePayment, getPayment } from "@/lib/pi-platform";
 export async function POST(req: NextRequest) {
   try {
     const me = await verifyPiToken(req.headers.get("authorization"));
+    // per-user rate limit for payment approvals: 60 per hour
+    if (!(await checkRateLimit(`${me.uid}:payments:approve`, 60, 3600))) {
+      return NextResponse.json({ error: "Rate limit exceeded. Try again later." }, { status: 429 });
+    }
     const { paymentId, hireRequestId } = await req.json();
     if (!paymentId || !hireRequestId) {
       return NextResponse.json({ error: "Missing paymentId or hireRequestId" }, { status: 400 });

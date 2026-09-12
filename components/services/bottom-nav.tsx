@@ -2,16 +2,16 @@
 
 import type { ReactElement } from "react"
 import type { TabId } from "@/lib/services/data"
-import { IconHome, IconGrid, IconSearch, IconActivity, IconUser } from "./icons"
+import { IconHome, IconInbox, IconSearch, IconActivity, IconUser } from "./icons"
 import { cx } from "./ui"
 
 type NavItem = { id: TabId; label: string; icon: ReactElement }
 
 const TABS: NavItem[] = [
   { id: "home", label: "Home", icon: <IconHome className="h-5 w-5" /> },
-  { id: "categories", label: "Categories", icon: <IconGrid className="h-5 w-5" /> },
   { id: "search", label: "Search", icon: <IconSearch className="h-5 w-5" /> },
   { id: "activity", label: "Activity", icon: <IconActivity className="h-5 w-5" /> },
+  { id: "messages", label: "Messages", icon: <IconInbox className="h-5 w-5" /> },
   { id: "profile", label: "Profile", icon: <IconUser className="h-5 w-5" /> },
 ]
 

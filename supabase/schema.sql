@@ -1,8 +1,8 @@
 -- ============================================================================
--- Pi Services Marketplace — Shared Backend Schema
--- Replaces the missing sdk.appState/globalState/sharedState store referenced
--- in contexts/services-context.tsx (sharedStoreFromSdk). Run this in the
--- Supabase SQL editor, or via `supabase db push` if you keep it in a migration.
+-- Talse Marketplace — Historical schema snapshot
+-- This file is intentionally kept as a historical snapshot only.
+-- The source of truth for production schema changes is now the migration files
+-- under supabase/migrations/; use those for any new schema work.
 -- ============================================================================
 
 create extension if not exists "pgcrypto";
@@ -21,9 +21,13 @@ create table if not exists profiles (
   wallet_address  text,
   rating_avg      numeric(3,2) default 0,
   rating_count    integer default 0,
+  suspended_at    timestamptz,
+  suspension_reason text,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
+
+create index if not exists idx_profiles_suspended_at on profiles(suspended_at);
 
 -- ---------------------------------------------------------------------------
 -- services (the shared listings catalog — the core gap in the current app)
@@ -94,6 +98,8 @@ create table if not exists hire_requests (
   updated_at        timestamptz not null default now()
 );
 
+alter table hire_requests add column if not exists reference_notes text;
+
 create index if not exists idx_hire_buyer on hire_requests(buyer_uid);
 create index if not exists idx_hire_provider on hire_requests(provider_uid);
 create index if not exists idx_hire_status on hire_requests(status);
@@ -119,6 +125,7 @@ create table if not exists messages (
   hire_request_id uuid not null references hire_requests(id) on delete cascade,
   sender_uid      text not null references profiles(pi_uid),
   text            text not null,
+  attachments     text[] not null default '{}',
   created_at      timestamptz not null default now()
 );
 
@@ -134,10 +141,14 @@ create table if not exists reviews (
   provider_uid    text not null references profiles(pi_uid),
   rating          integer not null check (rating between 1 and 5),
   text            text,
-  created_at      timestamptz not null default now()
+  created_at      timestamptz not null default now(),
+  hidden_at       timestamptz,
+  hidden_by       text,
+  hidden_reason   text
 );
 
 create index if not exists idx_reviews_provider on reviews(provider_uid);
+create index if not exists idx_reviews_hidden_at on reviews(hidden_at);
 
 -- ---------------------------------------------------------------------------
 -- boost_purchases (audit trail for sdk.makePurchase() boost product)
@@ -175,6 +186,35 @@ drop trigger if exists trg_profiles_updated on profiles;
 create trigger trg_profiles_updated before update on profiles
   for each row execute function set_updated_at();
 
+create or replace function append_hire_attachment_paths(hire_id uuid, incoming text[])
+returns table (id uuid, attachments text[])
+language plpgsql
+as $$
+declare
+  current_count integer;
+begin
+  select coalesce(cardinality(attachments), 0)
+    into current_count
+  from hire_requests
+  where id = hire_id
+  for update;
+
+  if current_count is null then
+    raise exception 'Hire request not found';
+  end if;
+
+  if current_count + coalesce(cardinality(incoming), 0) > 6 then
+    raise exception 'Too many files for this request';
+  end if;
+
+  return query
+  update hire_requests
+  set attachments = coalesce(attachments, '{}') || coalesce(incoming, '{}')
+  where id = hire_id
+  returning id, attachments;
+end;
+$$;
+
 -- ---------------------------------------------------------------------------
 -- rating rollup trigger (keeps profiles.rating_avg/count in sync with reviews)
 -- ---------------------------------------------------------------------------
@@ -205,3 +245,6 @@ create trigger trg_reviews_rollup after insert or update or delete on reviews
 -- Run this in the Supabase SQL editor or include in your migration pipeline.
 -- ---------------------------------------------------------------------------
 alter table profiles add column if not exists location text;
+alter table profiles add column if not exists jobs_completed integer not null default 0;
+alter table profiles add column if not exists total_earned numeric(12,2) not null default 0;
+alter table profiles add column if not exists refunds_against_provider numeric(12,2) not null default 0;

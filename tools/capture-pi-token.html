@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Capture Pi Access Token (local)</title>
+    <style>
+      body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; padding: 24px; max-width: 720px; margin: auto; }
+      .card { border: 1px solid #e5e7eb; padding: 16px; border-radius: 8px; background: #fff; }
+      textarea { width: 100%; height: 80px; }
+      button { padding: 8px 12px; margin-right: 8px; }
+      .warn { color: #b91c1c; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>Capture Pi Access Token (local)</h1>
+    <p class="warn">Security warning: this page displays your Pi access token in plain text. Run locally, copy the token, then close the page. Do NOT paste tokens into public places.</p>
+
+    <div class="card">
+      <p>Steps:</p>
+      <ol>
+        <li>Click <strong>Load SDK</strong> to load Pi SDK.</li>
+        <li>Click <strong>Authenticate</strong> and complete the Pi auth flow in the popup/iframe.</li>
+        <li>Copy the value shown in the box below. Store it securely or paste into your test commands.</li>
+      </ol>
+
+      <div style="margin-top:12px;">
+        <button id="load">Load SDK</button>
+        <button id="init" disabled>Init</button>
+        <button id="auth" disabled>Authenticate</button>
+        <button id="clear">Clear</button>
+      </div>
+
+      <div style="margin-top:12px;">
+        <label for="token">Access token</label>
+        <textarea id="token" placeholder="Token will appear here" readonly></textarea>
+      </div>
+
+      <div style="margin-top:12px; font-size:13px; color:#374151">SDK URL: <code>https://sdk.minepi.com/pi-sdk.js</code></div>
+    </div>
+
+    <script>
+      const SDK_URL = 'https://sdk.minepi.com/pi-sdk.js';
+      const loadBtn = document.getElementById('load');
+      const initBtn = document.getElementById('init');
+      const authBtn = document.getElementById('auth');
+      const clearBtn = document.getElementById('clear');
+      const tokenArea = document.getElementById('token');
+
+      loadBtn.addEventListener('click', async () => {
+        if (window.Pi) { alert('SDK already loaded'); initBtn.disabled = false; authBtn.disabled = false; return; }
+        const s = document.createElement('script');
+        s.src = SDK_URL;
+        s.async = true;
+        s.onload = () => { alert('SDK loaded'); initBtn.disabled = false; authBtn.disabled = false; };
+        s.onerror = () => alert('Failed to load SDK');
+        document.head.appendChild(s);
+      });
+
+      initBtn.addEventListener('click', async () => {
+        try {
+          if (!window.Pi) { alert('SDK not loaded'); return; }
+          await window.Pi.init({ version: '2.0', sandbox: true });
+          alert('Pi.init() complete');
+        } catch (e) { alert('Pi.init() failed: ' + e?.message); }
+      });
+
+      authBtn.addEventListener('click', async () => {
+        try {
+          if (!window.Pi) { alert('SDK not loaded'); return; }
+          const result = await window.Pi.authenticate(['username','payments','wallet_address'], (payment) => { console.warn('Incomplete payment:', payment); });
+          tokenArea.value = result.accessToken ?? '';
+          alert('Authentication complete — token displayed below');
+        } catch (e) {
+          alert('Authenticate failed: ' + (e?.message ?? e));
+        }
+      });
+
+      clearBtn.addEventListener('click', () => { tokenArea.value = ''; });
+    </script>
+  </body>
+</html>

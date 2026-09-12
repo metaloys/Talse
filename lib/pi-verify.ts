@@ -10,7 +10,7 @@
  * Docs: https://github.com/pi-apps/pi-platform-docs/blob/master/platform_API.md
  */
 
-const PI_PLATFORM_API_BASE = "https://api.minepi.com/v2";
+import { PI_PLATFORM_API_BASE } from "@/lib/pi-env";
 
 export interface PiMeResponse {
   uid: string;
@@ -41,10 +41,24 @@ export async function verifyPiToken(authHeader: string | null): Promise<PiMeResp
     throw new PiAuthError("Missing or malformed Authorization header");
   }
   const accessToken = authHeader.slice("Bearer ".length);
+  const controller = new AbortController();
+  const timeoutMs = Number(process.env.PI_FETCH_TIMEOUT_MS ?? 8000);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
-  const res = await fetch(`${PI_PLATFORM_API_BASE}/me`, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${PI_PLATFORM_API_BASE}/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new PiAuthError("Pi token verification timed out", 504);
+    }
+    throw new PiAuthError("Pi token verification request failed", 502);
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) {
     throw new PiAuthError(
