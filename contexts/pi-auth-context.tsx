@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { PI_NETWORK_CONFIG } from "@/lib/system-config";
 import { buildPiSdk, createSdk } from "@/lib/pi";
+import { backendApi } from "@/lib/backend-api";
 import type {
   Product,
   SDKLiteInstance,
@@ -258,18 +259,29 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       // onIncompletePaymentFound is required by Pi's SDK: it fires if the
       // user has a payment from a previous session that never completed.
       setAuthMessage("Authenticating with Pi...");
+      let capturedIncompletePayment: any = null;
       const authResult = await window.Pi.authenticate(
         ["username", "payments", "wallet_address", "in_app_notifications"],
         (payment: any) => {
-          // An incomplete payment from a prior session. In production, POST
-          // this to /api/payments/complete (or /cancel) so it isn't stuck.
-          console.warn("[PiAuth] Incomplete payment found:", payment);
+          capturedIncompletePayment = payment;
         }
       );
       // Keep the Pi access token in memory for authenticated API calls
       // and to drive the periodic realtime-token refresh loop below.
       // This state is required for normal operation (not temporary).
       setAccessToken(authResult.accessToken);
+      if (capturedIncompletePayment) {
+        if (!(window as any).__pi_payment_recovery_in_flight) {
+          (window as any).__pi_payment_recovery_in_flight = backendApi.payments
+            .recover(capturedIncompletePayment.id, authResult.accessToken)
+            .finally(() => {
+              delete (window as any).__pi_payment_recovery_in_flight;
+            });
+        }
+        void (window as any).__pi_payment_recovery_in_flight.catch((err: unknown) => {
+          console.error("Incomplete payment recovery failed:", err);
+        });
+      }
       // Fire-and-forget fetch for a short-lived Supabase-compatible realtime token.
       fetchRealtimeToken(authResult.accessToken).then(setRealtimeToken);
       setPiUser(authResult.user);

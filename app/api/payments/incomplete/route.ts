@@ -22,10 +22,6 @@ export async function GET(req: NextRequest) {
 
     if (isAdmin(me.uid)) {
       const list = await getIncompleteServerPayments();
-      console.log("[PiDebug] getIncompleteServerPayments() raw admin result", {
-        count: (list ?? []).length,
-        payments: (list ?? []).slice(0, 20).map(safePaymentSummary),
-      });
       return NextResponse.json({ incomplete: list ?? [] });
     }
 
@@ -35,42 +31,7 @@ export async function GET(req: NextRequest) {
       .or(`buyer_uid.eq.${me.uid},provider_uid.eq.${me.uid}`);
 
     const mySet = new Set((myHireRequests ?? []).map((row) => String(row.id)));
-    const targetHireRequestId = "a86150df-28ab-454c-93dc-61f2957abe0a";
     const list = await getIncompleteServerPayments();
-
-    console.log("[PiDebug] getIncompleteServerPayments() raw result", {
-      count: (list ?? []).length,
-      payments: (list ?? []).slice(0, 20).map(safePaymentSummary),
-    });
-
-    console.log("[PiDebug] myHireRequests ids", {
-      count: (myHireRequests ?? []).length,
-      ids: (myHireRequests ?? []).map((row) => String(row.id)),
-      targetPresent: mySet.has(targetHireRequestId),
-      targetHireRequestId,
-    });
-
-    const decisions: Array<{
-      identifier: string | null;
-      paymentHireRequestId: string | null;
-      inMySet: boolean;
-      finalIncluded: boolean;
-    }> = (list ?? []).map((payment: any) => {
-      const paymentHireRequestId = payment?.metadata?.hireRequestId;
-      const inMySet = typeof paymentHireRequestId === "string" && mySet.has(paymentHireRequestId);
-      return {
-        identifier: typeof payment?.identifier === "string" ? payment.identifier : null,
-        paymentHireRequestId: typeof paymentHireRequestId === "string" ? paymentHireRequestId : null,
-        inMySet,
-        finalIncluded: typeof paymentHireRequestId === "string" && mySet.has(paymentHireRequestId),
-      };
-    });
-
-    console.log("[PiDebug] filter decisions", {
-      decisions: decisions.slice(0, 20),
-      removedCount: decisions.filter((d) => !d.finalIncluded).length,
-      targetPresentInDecisions: decisions.some((d) => d.paymentHireRequestId === targetHireRequestId),
-    });
 
     const filtered = (list ?? []).filter((payment: any) => {
       const paymentHireRequestId = payment?.metadata?.hireRequestId;
