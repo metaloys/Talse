@@ -209,6 +209,48 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   const [realtimeToken, setRealtimeToken] = useState<string | null>(null);
   const [piUser, setPiUser] = useState<{ uid: string; username: string } | null>(null);
 
+  const recoverIncompletePaymentsAfterLogin = async (accessToken: string): Promise<void> => {
+    try {
+      const { incomplete } = await backendApi.payments.listIncomplete(accessToken);
+      if (!Array.isArray(incomplete) || incomplete.length === 0) {
+        return;
+      }
+
+      console.info(`[PiAuth] Found ${incomplete.length} incomplete payment(s) on login, attempting recovery`);
+
+      for (const payment of incomplete) {
+        const paymentId = typeof payment?.id === "string" ? payment.id : String(payment?.id ?? "");
+        if (!paymentId) continue;
+
+        const pendingRecovery = (window as any).__pi_payment_recovery_in_flight as Promise<{ status?: string }> | undefined;
+        if (pendingRecovery) {
+          try {
+            await pendingRecovery;
+          } catch {
+            // Recovery attempts are best-effort; don't block login on a stale or failed attempt.
+          }
+        }
+
+        if (!(window as any).__pi_payment_recovery_in_flight) {
+          (window as any).__pi_payment_recovery_in_flight = backendApi.payments
+            .recover(paymentId, accessToken)
+            .finally(() => {
+              delete (window as any).__pi_payment_recovery_in_flight;
+            });
+        }
+
+        try {
+          const result = await (window as any).__pi_payment_recovery_in_flight;
+          console.info(`[PiAuth] Recovered payment ${paymentId}: ${result?.status ?? "unknown"}`);
+        } catch (err) {
+          console.error(`[PiAuth] Recovery failed for payment ${paymentId}:`, err);
+        }
+      }
+    } catch (err) {
+      console.error("[PiAuth] Incomplete payment listing check failed:", err);
+    }
+  };
+
   const fetchProducts = async (sdkInstance: SDKLiteInstance): Promise<void> => {
     try {
       const { products } = await sdkInstance.state.products();
@@ -282,6 +324,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
           console.error("Incomplete payment recovery failed:", err);
         });
       }
+      void recoverIncompletePaymentsAfterLogin(authResult.accessToken);
       // Fire-and-forget fetch for a short-lived Supabase-compatible realtime token.
       fetchRealtimeToken(authResult.accessToken).then(setRealtimeToken);
       setPiUser(authResult.user);
