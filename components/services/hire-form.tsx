@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { usePiAuth } from "@/contexts/pi-auth-context";
-import { supabaseAdmin } from "@/lib/supabase-server";
 import { backendApi } from "@/lib/backend-api";
 import {
   MESSAGE_MAX,
@@ -37,6 +36,8 @@ export function HireForm({
   const [attachDraft, setAttachDraft] = useState("");
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const { accessToken } = usePiAuth();
   const { refreshRequests } = useServices();
   const [showErrors, setShowErrors] = useState(false);
@@ -79,6 +80,7 @@ export function HireForm({
   const uploadFilesForRequest = async (hireRequestId: string) => {
     if (!files.length) return [] as string[];
     setUploading(true);
+    setUploadError(null);
     try {
       const form = new FormData();
       files.forEach((f) => form.append("file", f));
@@ -87,38 +89,50 @@ export function HireForm({
         body: form,
         headers: { Authorization: `Bearer ${accessToken ?? ""}` },
       });
-      if (!res.ok) throw new Error("Upload failed");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data?.error ?? "Upload failed");
+      }
       const data = await res.json();
       return data.paths ?? [];
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Upload failed";
+      setUploadError("Attachment upload failed. Please try again or remove the file.");
+      throw new Error(message);
     } finally {
       setUploading(false);
     }
   };
 
-  const submit = () => {
+  const submit = async () => {
     if (!canSend) {
       setShowErrors(true);
       return;
     }
-    void (async () => {
-      try {
-        // create hire request via backend directly so we get the id
-        const token = accessToken;
-        if (!token) throw new Error("Not authenticated");
-        const { request } = await backendApi.hireRequests.create({ serviceId: service.id, message: trimmedMsg, deadline, attachments }, token);
-        const hireId = request.id;
-        // upload files (if any) and append
-        const paths = await uploadFilesForRequest(hireId);
-        if (paths.length) {
-          // refresh requests to pick up updated attachments
-          await refreshRequests();
-        }
-        onSent();
-      } catch (err) {
-        console.error("Failed to send hire request:", err);
-        setShowErrors(true);
+    if (submitting) return;
+
+    setSubmitting(true);
+    setUploadError(null);
+    try {
+      // create hire request via backend directly so we get the id
+      const token = accessToken;
+      if (!token) throw new Error("Not authenticated");
+      const { request } = await backendApi.hireRequests.create({ serviceId: service.id, message: trimmedMsg, deadline, attachments }, token);
+      const hireId = request.id;
+      const paths = await uploadFilesForRequest(hireId);
+      if (paths.length) {
+        await refreshRequests();
       }
-    })();
+      onSent();
+    } catch (err) {
+      console.error("Failed to send hire request:", err);
+      setShowErrors(true);
+      if (err instanceof Error && /upload/i.test(err.message)) {
+        setUploadError("Attachment upload failed. Please try again or remove the file.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const img = service.images[0];
@@ -222,6 +236,7 @@ export function HireForm({
               ))}
             </div>
           )}
+          {uploadError && <p className="mt-2 text-xs font-medium text-destructive">{uploadError}</p>}
           {attachments.length > 0 && (
             <div className="mt-2 space-y-1.5">
               {attachments.map((a, i) => (
@@ -252,9 +267,9 @@ export function HireForm({
 
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-card/95 px-4 py-3 ps-safe-bottom backdrop-blur">
         <div className="mx-auto max-w-md">
-          <Button className={cx("w-full")} size="lg" onClick={submit}>
+          <Button className={cx("w-full")} size="lg" onClick={() => void submit()} disabled={submitting || uploading}>
             <IconSend size={18} />
-            Send hire request
+            {submitting ? "Sending…" : "Send hire request"}
           </Button>
         </div>
       </div>

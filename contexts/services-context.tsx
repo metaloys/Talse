@@ -528,6 +528,28 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
     }, [realtimeClient]);
 
     useEffect(() => {
+      if (!piUser?.uid) return;
+
+      const incomingRequestsChannel = realtimeClient.channel(`user:${piUser.uid}:incoming-requests`, {
+        config: { private: true },
+      });
+
+      incomingRequestsChannel.on("broadcast", { event: "new_request" }, () => {
+        refreshRequestsRef.current();
+      });
+
+      incomingRequestsChannel.subscribe();
+
+      return () => {
+        try {
+          incomingRequestsChannel.unsubscribe();
+        } catch (err) {
+          // ignore
+        }
+      };
+    }, [piUser?.uid, realtimeClient]);
+
+    useEffect(() => {
       return () => {
         for (const channel of channelsRef.current.values()) {
           channel.unsubscribe();

@@ -12,7 +12,6 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
   const { outgoing, incoming, setRequestStatus, pushToast, requests } = useServices();
   const { accessToken } = usePiAuth();
   const [openRequest, setOpenRequest] = useState<string | null>(null);
-  const [cancelled, setCancelled] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [reviewPromptFor, setReviewPromptFor] = useState<null | HireRequest>(null);
 
@@ -42,7 +41,7 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
     };
 
     for (const req of allRequests) {
-      const status = cancelled.includes(req.id) ? "cancelled" : req.status;
+      const status = req.status;
       if (status === "pending") {
         groups.needsAction.push(req);
       } else if (["accepted", "locked", "delivered", "disputed"].includes(status)) {
@@ -55,7 +54,7 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
     }
 
     return groups;
-  }, [allRequests, cancelled]);
+  }, [allRequests]);
 
   const sectionOrder = [
     { key: "needsAction", title: "Needs action" },
@@ -65,7 +64,7 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
   ] as const;
 
   const requestCard = (req: HireRequest) => {
-    const status = cancelled.includes(req.id) ? "cancelled" : req.status;
+    const status = req.status;
     const counterpart = req.direction === "incoming" ? req.customerName : req.providerName;
     const cardExpanded = openRequest === req.id;
 
@@ -138,8 +137,9 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
                   setFeedback("Only pending requests can be cancelled.");
                   return;
                 }
-                setCancelled((items) => [...items, req.id]);
-                setFeedback("Request cancelled successfully.");
+                void setRequestStatus(req.id, "declined")
+                  .then(() => setFeedback("Request cancelled successfully."))
+                  .catch((err) => console.error("[Activity] Cancel failed:", err));
               }}
             >
               Cancel
