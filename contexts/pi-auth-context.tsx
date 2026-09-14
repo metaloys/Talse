@@ -198,6 +198,16 @@ const loadSDKLite = (): Promise<void> => {
   });
 };
 
+// In-flight guard so concurrent callers await the same script load
+let __loadPiSDK_inflight: Promise<void> | null = null;
+function loadPiSDKOnce(): Promise<void> {
+  if (__loadPiSDK_inflight) return __loadPiSDK_inflight;
+  __loadPiSDK_inflight = loadPiSDK();
+  // Do not clear the cache here; keeping the promise cached ensures
+  // concurrent callers during React StrictMode share the same load.
+  return __loadPiSDK_inflight;
+}
+
 export function PiAuthProvider({ children }: { children: ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authMessage, setAuthMessage] = useState("Initializing Pi Network...");
@@ -276,6 +286,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       }
 
       setAuthMessage("Loading Pi SDK...");
+      await loadPiSDKOnce();
       setAuthMessage("Initializing Pi Network...");
       await window.Pi.init({
         version: "2.0",
