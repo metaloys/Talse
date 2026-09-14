@@ -67,7 +67,7 @@ async function payIntoEscrow(req: HireRequest, accessToken: string): Promise<voi
 }
 
 export function EscrowActions({ req, onReleased }: { req: HireRequest; onReleased?: (req: HireRequest) => void }) {
-  const { accessToken } = usePiAuth();
+  const { accessToken, recoveryInProgress } = usePiAuth();
   const { refreshRequests, setRequestStatus, fileDispute, pushToast } = useServices();
   const [busy, setBusy] = useState(false);
   const [showRecoveryCard, setShowRecoveryCard] = useState(false);
@@ -174,6 +174,10 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
           disabled={busy}
           onClick={() =>
             withBusy(async () => {
+              if (recoveryInProgress) {
+                pushToast("Resolving a previous payment, try again in a moment", "warning");
+                return;
+              }
               await payIntoEscrow(req, accessToken);
               await refreshRequests();
               pushToast("Payment locked in escrow", "success");

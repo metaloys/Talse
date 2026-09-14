@@ -39,7 +39,10 @@ export async function POST(req: NextRequest) {
     }
 
     const txid = payment?.txid ?? payment?.transaction?.txid ?? payment?.transaction_hash ?? null;
-    const verified = payment?.transaction_verified === true || !!txid || payment?.status === "complete";
+    // Require explicit transaction_verified === true as the authoritative gate
+    // before attempting to finalize a payment. Do not rely solely on a
+    // present txid or status field.
+    const verified = payment?.transaction_verified === true;
 
     if (verified) {
       try {
@@ -47,8 +50,15 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ status: "complete_failed", error: "Payment verified but missing txid" }, { status: 409 });
         }
         await completePayment(paymentId, txid);
-        const finalRow = await finalizePaymentLock(hireRequestId, paymentId, txid);
-        return NextResponse.json({ status: "completed", paymentId, request: finalRow });
+        // Re-fetch the payment and require `developer_completed === true` to
+        // confirm that the downstream complete has fully processed before
+        // returning a completed status to the client.
+        const after = await getPayment(paymentId);
+        if (after?.developer_completed === true) {
+          const finalRow = await finalizePaymentLock(hireRequestId, paymentId, txid);
+          return NextResponse.json({ status: "completed", paymentId, request: finalRow });
+        }
+        return NextResponse.json({ status: "complete_unconfirmed", paymentId });
       } catch (err) {
         console.error("Failed to complete payment during recovery", err);
         return NextResponse.json({ status: "complete_failed", error: String(err) }, { status: 500 });

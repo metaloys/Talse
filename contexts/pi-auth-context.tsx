@@ -134,6 +134,7 @@ interface PiAuthContextType {
   accessToken: string | null;
   piUser: { uid: string; username: string } | null;
   realtimeToken: string | null;
+  recoveryInProgress: boolean;
 }
 
 const PiAuthContext = createContext<PiAuthContextType | undefined>(undefined);
@@ -208,6 +209,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [realtimeToken, setRealtimeToken] = useState<string | null>(null);
   const [piUser, setPiUser] = useState<{ uid: string; username: string } | null>(null);
+  const [recoveryInProgress, setRecoveryInProgress] = useState<boolean>(false);
 
   const recoverIncompletePaymentsAfterLogin = async (accessToken: string): Promise<void> => {
     try {
@@ -217,6 +219,8 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       }
 
       console.info(`[PiAuth] Found ${incomplete.length} incomplete payment(s) on login, attempting recovery`);
+      // Mark recovery at the start of this batch so UI flows block new payments.
+      setRecoveryInProgress(true);
 
       for (const payment of incomplete) {
         const paymentId = typeof payment?.id === "string" ? payment.id : String(payment?.id ?? "");
@@ -286,7 +290,6 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       }
 
       setAuthMessage("Loading Pi SDK...");
-      await loadPiSDK();
       setAuthMessage("Initializing Pi Network...");
       await window.Pi.init({
         version: "2.0",
@@ -297,6 +300,8 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       // below. This is what actually gets us a Pi Platform API access token
       // (scoped for 'username', 'payments', and 'wallet_address'), which our
       // own backend (app/api/*) verifies server-side against
+        // Ensure recoveryInProgress is cleared after processing all payments
+        setRecoveryInProgress(false);
       // api.minepi.com/v2/me before trusting any write.
       // onIncompletePaymentFound is required by Pi's SDK: it fires if the
       // user has a payment from a previous session that never completed.
@@ -305,7 +310,12 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       const authResult = await window.Pi.authenticate(
         ["username", "payments", "wallet_address", "in_app_notifications"],
         (payment: any) => {
+          // Mark that a recovery is pending and capture the payment object. The
+          // actual recover call needs a Pi access token, so we perform the
+          // recover after authResult.accessToken is available. This flag is
+          // used by UI flows to block new payment starts until recovery settles.
           capturedIncompletePayment = payment;
+          setRecoveryInProgress(true);
         }
       );
       // Keep the Pi access token in memory for authenticated API calls
@@ -313,16 +323,23 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       // This state is required for normal operation (not temporary).
       setAccessToken(authResult.accessToken);
       if (capturedIncompletePayment) {
-        if (!(window as any).__pi_payment_recovery_in_flight) {
-          (window as any).__pi_payment_recovery_in_flight = backendApi.payments
-            .recover(capturedIncompletePayment.id, authResult.accessToken)
-            .finally(() => {
-              delete (window as any).__pi_payment_recovery_in_flight;
-            });
+        const paymentIdentifier = capturedIncompletePayment?.identifier ?? capturedIncompletePayment?.id ?? null;
+        if (paymentIdentifier) {
+          if (!(window as any).__pi_payment_recovery_in_flight) {
+            (window as any).__pi_payment_recovery_in_flight = backendApi.payments
+              .recover(paymentIdentifier, authResult.accessToken)
+              .finally(() => {
+                delete (window as any).__pi_payment_recovery_in_flight;
+                setRecoveryInProgress(false);
+              });
+          }
+          void (window as any).__pi_payment_recovery_in_flight.catch((err: unknown) => {
+            console.error("Incomplete payment recovery failed:", err);
+          });
+        } else {
+          // Nothing to recover; clear the in-progress flag we set in the callback.
+          setRecoveryInProgress(false);
         }
-        void (window as any).__pi_payment_recovery_in_flight.catch((err: unknown) => {
-          console.error("Incomplete payment recovery failed:", err);
-        });
       }
       void recoverIncompletePaymentsAfterLogin(authResult.accessToken);
       // Fire-and-forget fetch for a short-lived Supabase-compatible realtime token.
@@ -426,6 +443,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     realtimeToken,
     piUser,
     logout,
+    recoveryInProgress,
   };
 
   return (
