@@ -15,14 +15,14 @@ async function payIntoEscrow(req: HireRequest, accessToken: string): Promise<voi
     throw new Error("Pi payments are not available in this environment");
   }
 
-  const pendingRecovery = (window as any).__pi_payment_recovery_in_flight as Promise<unknown> | undefined;
-  if (pendingRecovery) {
-    try {
-      await pendingRecovery;
-    } catch {
-      // Recovery attempts are best-effort; keep the retry from racing a stale payment.
+    const recoveryMap = (window as any).__pi_payment_recovery_in_flight as Map<string, Promise<unknown>> | undefined;
+    if (recoveryMap && recoveryMap.size > 0) {
+      try {
+        await Promise.all(Array.from(recoveryMap.values()));
+      } catch {
+        // Recovery attempts are best-effort; keep the retry from racing a stale payment.
+      }
     }
-  }
 
   return new Promise((resolve, reject) => {
     window.Pi.createPayment(
@@ -101,10 +101,16 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
     if (!accessToken) return;
     try {
       setBusy(true);
-      (window as any).__pi_payment_recovery_in_flight = backendApi.payments.recover(paymentId, accessToken).finally(() => {
-        delete (window as any).__pi_payment_recovery_in_flight;
-      });
-      await (window as any).__pi_payment_recovery_in_flight;
+        if (!(window as any).__pi_payment_recovery_in_flight) {
+          (window as any).__pi_payment_recovery_in_flight = new Map();
+        }
+        const map = (window as any).__pi_payment_recovery_in_flight as Map<string, Promise<unknown>>;
+        if (!map.has(paymentId)) {
+          map.set(paymentId, backendApi.payments.recover(paymentId, accessToken).finally(() => {
+            map.delete(paymentId);
+          }));
+        }
+        await map.get(paymentId);
       setShowRecoveryCard(false);
       setStuckPayment(null);
       pushToast("Recovered stuck payment", "success");
