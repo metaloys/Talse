@@ -10,6 +10,7 @@ import React, {
 import { PI_NETWORK_CONFIG } from "@/lib/system-config";
 import { buildPiSdk, createSdk } from "@/lib/pi";
 import { backendApi } from "@/lib/backend-api";
+import { getOrCreateRecovery, waitForAllRecoveries } from "@/lib/recovery-guard";
 import type {
   Product,
   SDKLiteInstance,
@@ -226,30 +227,15 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
         const paymentId = typeof payment?.id === "string" ? payment.id : String(payment?.id ?? "");
         if (!paymentId) continue;
 
-        const pendingRecovery = (window as any).__pi_payment_recovery_in_flight as Promise<{ status?: string }> | undefined;
-        if (pendingRecovery) {
-          try {
-            await pendingRecovery;
-          } catch {
-            // Recovery attempts are best-effort; don't block login on a stale or failed attempt.
-          }
-        }
-
-        if (!(window as any).__pi_payment_recovery_in_flight) {
-          (window as any).__pi_payment_recovery_in_flight = backendApi.payments
-            .recover(paymentId, accessToken)
-            .finally(() => {
-              delete (window as any).__pi_payment_recovery_in_flight;
-            });
-        }
-
         try {
-          const result = await (window as any).__pi_payment_recovery_in_flight;
+          const result = await getOrCreateRecovery(paymentId, () => backendApi.payments.recover(paymentId, accessToken));
           console.info(`[PiAuth] Recovered payment ${paymentId}: ${result?.status ?? "unknown"}`);
         } catch (err) {
           console.error(`[PiAuth] Recovery failed for payment ${paymentId}:`, err);
         }
       }
+      // Clear batch flag after processing
+      setRecoveryInProgress(false);
     } catch (err) {
       console.error("[PiAuth] Incomplete payment listing check failed:", err);
     }
@@ -325,19 +311,13 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       if (capturedIncompletePayment) {
         const paymentIdentifier = capturedIncompletePayment?.identifier ?? capturedIncompletePayment?.id ?? null;
         if (paymentIdentifier) {
-          if (!(window as any).__pi_payment_recovery_in_flight) {
-            (window as any).__pi_payment_recovery_in_flight = new Map();
+          try {
+            void getOrCreateRecovery(paymentIdentifier, () => backendApi.payments.recover(paymentIdentifier, authResult.accessToken)).catch((err: unknown) => {
+              console.error("Incomplete payment recovery failed:", err);
+            });
+          } finally {
+            // recoveryInProgress will be cleared by the proactive batch completion
           }
-          const map = (window as any).__pi_payment_recovery_in_flight as Map<string, Promise<unknown>>;
-          if (!map.has(paymentIdentifier)) {
-            map.set(paymentIdentifier, backendApi.payments.recover(paymentIdentifier, authResult.accessToken).finally(() => {
-              map.delete(paymentIdentifier);
-              setRecoveryInProgress(false);
-            }));
-          }
-          void map.get(paymentIdentifier)!.catch((err: unknown) => {
-            console.error("Incomplete payment recovery failed:", err);
-          });
         } else {
           // Nothing to recover; clear the in-progress flag we set in the callback.
           setRecoveryInProgress(false);

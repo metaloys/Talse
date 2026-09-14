@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { useServices } from "@/contexts/services-context";
 import { backendApi } from "@/lib/backend-api";
+import { getOrCreateRecovery, waitForAllRecoveries } from "@/lib/recovery-guard";
 import { getFrontendPlatformFeePercent, calcPlatformFee, BLOCKCHAIN_GAS_LABEL } from "@/lib/frontend-fee-config";
 import { formatPi, type HireRequest } from "@/lib/services/data";
 import { Button } from "./ui";
@@ -15,13 +16,10 @@ async function payIntoEscrow(req: HireRequest, accessToken: string): Promise<voi
     throw new Error("Pi payments are not available in this environment");
   }
 
-    const recoveryMap = (window as any).__pi_payment_recovery_in_flight as Map<string, Promise<unknown>> | undefined;
-    if (recoveryMap && recoveryMap.size > 0) {
-      try {
-        await Promise.all(Array.from(recoveryMap.values()));
-      } catch {
-        // Recovery attempts are best-effort; keep the retry from racing a stale payment.
-      }
+    try {
+      await waitForAllRecoveries();
+    } catch (e) {
+      // If helper fails, fall back silently.
     }
 
   return new Promise((resolve, reject) => {
@@ -41,12 +39,7 @@ async function payIntoEscrow(req: HireRequest, accessToken: string): Promise<voi
         },
         onIncompletePaymentFound: async (payment: any) => {
           try {
-            if (!(window as any).__pi_payment_recovery_in_flight) {
-              (window as any).__pi_payment_recovery_in_flight = backendApi.payments.recover(payment.id, accessToken).finally(() => {
-                delete (window as any).__pi_payment_recovery_in_flight;
-              });
-            }
-            await (window as any).__pi_payment_recovery_in_flight;
+            await getOrCreateRecovery(payment.id, () => backendApi.payments.recover(payment.id, accessToken));
           } catch (err) {
             console.error("Payment recovery failed:", err);
           }
@@ -101,16 +94,8 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
     if (!accessToken) return;
     try {
       setBusy(true);
-        if (!(window as any).__pi_payment_recovery_in_flight) {
-          (window as any).__pi_payment_recovery_in_flight = new Map();
-        }
-        const map = (window as any).__pi_payment_recovery_in_flight as Map<string, Promise<unknown>>;
-        if (!map.has(paymentId)) {
-          map.set(paymentId, backendApi.payments.recover(paymentId, accessToken).finally(() => {
-            map.delete(paymentId);
-          }));
-        }
-        await map.get(paymentId);
+      if (!paymentId) throw new Error("no payment id");
+      await getOrCreateRecovery(paymentId, () => backendApi.payments.recover(paymentId, accessToken));
       setShowRecoveryCard(false);
       setStuckPayment(null);
       pushToast("Recovered stuck payment", "success");
