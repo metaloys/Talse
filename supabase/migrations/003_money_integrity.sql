@@ -1,52 +1,66 @@
 -- Migration 003: money-integrity hardening for payout locks, payout wallet lease,
 -- profile payout summaries, and realtime participant auth guardrails.
+--
+-- NOTE (audit follow-up): the payout wallet lease functions below were corrected
+-- to match the versions deployed in the live database (uuid owner, atomic
+-- update-based acquisition that returns false when another owner holds a live
+-- lease, release that nulls the lease). The earlier text-owner version in this
+-- file returned `true` unconditionally and was never applied to the live DB.
 
 create table if not exists payout_wallet_lease (
   wallet_id text primary key,
-  lease_owner text not null,
-  lease_acquired_at timestamptz not null default now(),
-  lease_expires_at timestamptz not null default now(),
+  lease_owner uuid,
+  lease_acquired_at timestamptz,
+  lease_expires_at timestamptz,
   updated_at timestamptz not null default now()
 );
 
-create or replace function acquire_payout_wallet_lease(p_wallet_id text, p_owner text, p_ttl_seconds integer default 45)
-returns table (acquired boolean)
+-- Seed the app wallet row: acquire_payout_wallet_lease is update-only and
+-- requires a pre-existing row for the wallet.
+insert into payout_wallet_lease (wallet_id) values ('app_wallet')
+on conflict (wallet_id) do nothing;
+
+create or replace function acquire_payout_wallet_lease(p_wallet_id text, p_owner uuid, p_ttl_seconds integer default 45)
+returns table (acquired boolean, lease_owner uuid, lease_expires_at timestamp with time zone)
 language plpgsql
+security definer
+set search_path to public
 as $$
 begin
-  if exists (
-    select 1
-    from payout_wallet_lease
-    where wallet_id = p_wallet_id
-      and lease_expires_at > now()
-      and lease_owner <> p_owner
-  ) then
-    return query select false;
-    return;
+  return query
+  update payout_wallet_lease
+  set lease_owner = p_owner,
+      lease_acquired_at = now(),
+      lease_expires_at = now() + make_interval(secs => p_ttl_seconds)
+  where wallet_id = p_wallet_id
+    and (payout_wallet_lease.lease_owner is null
+         or payout_wallet_lease.lease_expires_at < now())
+  returning true, payout_wallet_lease.lease_owner, payout_wallet_lease.lease_expires_at;
+
+  if not found then
+    return query select false, null::uuid, null::timestamptz;
   end if;
-
-  insert into payout_wallet_lease (wallet_id, lease_owner, lease_acquired_at, lease_expires_at, updated_at)
-  values (p_wallet_id, p_owner, now(), now() + make_interval(secs => p_ttl_seconds), now())
-  on conflict (wallet_id)
-  do update set
-    lease_owner = excluded.lease_owner,
-    lease_acquired_at = excluded.lease_acquired_at,
-    lease_expires_at = excluded.lease_expires_at,
-    updated_at = now()
-  where payout_wallet_lease.lease_expires_at <= now() or payout_wallet_lease.lease_owner = p_owner;
-
-  return query select true;
 end;
 $$;
 
-create or replace function release_payout_wallet_lease(p_wallet_id text, p_owner text)
-returns void
+create or replace function release_payout_wallet_lease(p_wallet_id text, p_owner uuid)
+returns boolean
 language plpgsql
+security definer
+set search_path to public
 as $$
+declare
+  v_count int;
 begin
-  delete from payout_wallet_lease
+  update payout_wallet_lease
+  set lease_owner = null,
+      lease_acquired_at = null,
+      lease_expires_at = null
   where wallet_id = p_wallet_id
     and lease_owner = p_owner;
+
+  get diagnostics v_count = row_count;
+  return v_count > 0;
 end;
 $$;
 

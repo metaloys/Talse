@@ -1,14 +1,16 @@
--- Migration 006: payment binding integrity + atomic wallet lease + rate limiting.
+-- Migration 006: payment binding integrity.
 --
 -- 1) One Pi payment may only ever be bound to ONE hire request
 --    (hire_requests.escrow_request_id). Without a unique constraint, a single
 --    payment could back multiple hire requests and be released twice.
--- 2) acquire_payout_wallet_lease previously returned `true` unconditionally,
---    even when the upsert matched no row (lease held by someone else). Fixed
---    to only return true when this caller actually holds the lease.
--- 3) check_rate_limit was referenced by lib/rate-limit.ts but defined in no
---    migration — the rate limiter silently no-op'd on every RPC error.
---    Fixed-window counter table + function added here.
+--
+-- 2) NOTE: check_rate_limit(), acquire_payout_wallet_lease() and
+--    release_payout_wallet_lease() already exist in the live deployment
+--    (applied outside the repo, correct/atomic versions — the lease takes a
+--    uuid owner and is update-only, requiring a seeded 'app_wallet' row).
+--    This migration intentionally does NOT replace them. For fresh
+--    environments the lease functions come from 003_money_integrity.sql and
+--    the rate limiter is created by the guarded block below.
 
 -- ---------------------------------------------------------------------------
 -- 1) Unique escrow payment binding
@@ -36,97 +38,48 @@ create unique index if not exists hire_requests_escrow_request_id_uniq
   where escrow_request_id is not null;
 
 -- ---------------------------------------------------------------------------
--- 2) Atomic payout wallet lease
+-- 2) Rate limiting — created ONLY if the deployment doesn't have it yet.
+--    Matches the call signature in lib/rate-limit.ts:
+--      supabaseAdmin.rpc("check_rate_limit", { p_key, p_limit, p_window_seconds })
+--    Returns true when the request is ALLOWED (hit_count <= limit).
 -- ---------------------------------------------------------------------------
 
-create table if not exists payout_wallet_lease (
-  wallet_id text primary key,
-  lease_owner text not null,
-  lease_acquired_at timestamptz not null default now(),
-  lease_expires_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
--- Replacement for the version in 003_money_integrity.sql. The only change is
--- correctness: the function now returns whether the caller actually acquired
--- the lease. `returning lease_owner into v_owner` yields NULL when the
--- ON CONFLICT DO UPDATE ... WHERE clause matched no row (live lease held by
--- another owner), which is exactly the "not acquired" case.
-create or replace function acquire_payout_wallet_lease(p_wallet_id text, p_owner text, p_ttl_seconds integer default 45)
-returns table (acquired boolean)
-language plpgsql
-as $$
-declare
-  v_owner text;
+do $$
 begin
-  insert into payout_wallet_lease (wallet_id, lease_owner, lease_acquired_at, lease_expires_at, updated_at)
-  values (p_wallet_id, p_owner, now(), now() + make_interval(secs => p_ttl_seconds), now())
-  on conflict (wallet_id)
-  do update set
-    lease_owner = excluded.lease_owner,
-    lease_acquired_at = excluded.lease_acquired_at,
-    lease_expires_at = excluded.lease_expires_at,
-    updated_at = now()
-  where payout_wallet_lease.lease_expires_at <= now() or payout_wallet_lease.lease_owner = p_owner
-  returning lease_owner into v_owner;
+  if not exists (select 1 from pg_proc where proname = 'check_rate_limit') then
+    create table rate_limits (
+      rl_key text primary key,
+      window_start timestamptz not null default now(),
+      count integer not null default 0
+    );
 
-  if v_owner is null then
-    return query select false;
-    return;
+    create or replace function check_rate_limit(p_key text, p_limit integer, p_window_seconds integer)
+    returns boolean
+    language plpgsql
+    security definer
+    set search_path to public
+    as $fn$
+    declare
+      v_count integer;
+    begin
+      insert into rate_limits (rl_key, window_start, count)
+      values (p_key, now(), 1)
+      on conflict (rl_key) do update
+        set count = case
+              when rate_limits.window_start < now() - make_interval(secs => p_window_seconds)
+              then 1
+              else rate_limits.count + 1
+            end,
+            window_start = case
+              when rate_limits.window_start < now() - make_interval(secs => p_window_seconds)
+              then now()
+              else rate_limits.window_start
+            end
+      returning count into v_count;
+
+      return v_count <= p_limit;
+    end;
+    $fn$;
   end if;
-
-  return query select true;
-end;
-$$;
-
--- release_payout_wallet_lease is unchanged from 003; re-asserted for parity.
-create or replace function release_payout_wallet_lease(p_wallet_id text, p_owner text)
-returns void
-language plpgsql
-as $$
-begin
-  delete from payout_wallet_lease
-  where wallet_id = p_wallet_id
-    and lease_owner = p_owner;
-end;
-$$;
-
--- ---------------------------------------------------------------------------
--- 3) Rate limiting (fixed-window counter)
--- ---------------------------------------------------------------------------
-
-create table if not exists rate_limit_buckets (
-  bucket_key text primary key,
-  window_started_at timestamptz not null default now(),
-  hit_count integer not null default 0
-);
-
--- Matches the call signature in lib/rate-limit.ts:
---   supabaseAdmin.rpc("check_rate_limit", { p_key, p_limit, p_window_seconds })
--- Returns true when the request is ALLOWED (hit_count <= limit), false when
--- the caller has exhausted the window.
-create or replace function check_rate_limit(p_key text, p_limit integer, p_window_seconds integer)
-returns boolean
-language plpgsql
-as $$
-declare
-  v_count integer;
-begin
-  insert into rate_limit_buckets (bucket_key, window_started_at, hit_count)
-  values (p_key, now(), 1)
-  on conflict (bucket_key) do update set
-    window_started_at = case
-      when rate_limit_buckets.window_started_at <= now() - make_interval(secs => p_window_seconds)
-      then now()
-      else rate_limit_buckets.window_started_at
-    end,
-    hit_count = case
-      when rate_limit_buckets.window_started_at <= now() - make_interval(secs => p_window_seconds)
-      then 1
-      else rate_limit_buckets.hit_count + 1
-    end
-  returning hit_count into v_count;
-
-  return v_count <= p_limit;
 end;
 $$;

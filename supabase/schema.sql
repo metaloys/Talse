@@ -1,5 +1,5 @@
--- ============================================================================
--- Talse Marketplace — Historical schema snapshot
+﻿-- ============================================================================
+-- Talse Marketplace â€” Historical schema snapshot
 -- This file is intentionally kept as a historical snapshot only.
 -- The source of truth for production schema changes is now the migration files
 -- under supabase/migrations/; use those for any new schema work.
@@ -9,7 +9,7 @@ create extension if not exists "pgcrypto";
 
 -- ---------------------------------------------------------------------------
 -- users (mirrors Pi identity; uid comes from Pi.authenticate(), NOT trusted
--- client-side — always re-verify server-side against the Pi Platform API
+-- client-side â€” always re-verify server-side against the Pi Platform API
 -- /me endpoint before writing anything tied to a uid)
 -- ---------------------------------------------------------------------------
 create table if not exists profiles (
@@ -30,7 +30,7 @@ create table if not exists profiles (
 create index if not exists idx_profiles_suspended_at on profiles(suspended_at);
 
 -- ---------------------------------------------------------------------------
--- services (the shared listings catalog — the core gap in the current app)
+-- services (the shared listings catalog â€” the core gap in the current app)
 -- ---------------------------------------------------------------------------
 create table if not exists services (
   id            uuid primary key default gen_random_uuid(),
@@ -77,7 +77,7 @@ create table if not exists hire_requests (
   status            request_status not null default 'pending',
   amount            numeric(12,2) not null,
 
-  -- escrow linkage — filled in once the contract call succeeds
+  -- escrow linkage â€” filled in once the contract call succeeds
   contract_id       text,          -- deployed escrow contract address
   escrow_request_id text,          -- the request_id passed into lock()/release()
   lock_txid         text,
@@ -251,7 +251,8 @@ alter table profiles add column if not exists refunds_against_provider numeric(1
 
 -- ---------------------------------------------------------------------------
 -- Payment binding integrity + wallet lease + rate limiting
--- (parity with supabase/migrations/006_payment_integrity_v2.sql)
+-- (parity with supabase/migrations/006_payment_integrity_v2.sql and the
+-- corrected 003_money_integrity.sql — matches the live deployment)
 -- ---------------------------------------------------------------------------
 create unique index if not exists hire_requests_escrow_request_id_uniq
   on hire_requests (escrow_request_id)
@@ -259,77 +260,90 @@ create unique index if not exists hire_requests_escrow_request_id_uniq
 
 create table if not exists payout_wallet_lease (
   wallet_id text primary key,
-  lease_owner text not null,
-  lease_acquired_at timestamptz not null default now(),
-  lease_expires_at timestamptz not null default now(),
+  lease_owner uuid,
+  lease_acquired_at timestamptz,
+  lease_expires_at timestamptz,
   updated_at timestamptz not null default now()
 );
 
-create or replace function acquire_payout_wallet_lease(p_wallet_id text, p_owner text, p_ttl_seconds integer default 45)
-returns table (acquired boolean)
+-- Seed the app wallet row: acquire_payout_wallet_lease is update-only and
+-- requires a pre-existing row for the wallet.
+insert into payout_wallet_lease (wallet_id) values ('app_wallet')
+on conflict (wallet_id) do nothing;
+
+create or replace function acquire_payout_wallet_lease(p_wallet_id text, p_owner uuid, p_ttl_seconds integer default 45)
+returns table (acquired boolean, lease_owner uuid, lease_expires_at timestamp with time zone)
 language plpgsql
+security definer
+set search_path to public
+as $$
+begin
+  return query
+  update payout_wallet_lease
+  set lease_owner = p_owner,
+      lease_acquired_at = now(),
+      lease_expires_at = now() + make_interval(secs => p_ttl_seconds)
+  where wallet_id = p_wallet_id
+    and (payout_wallet_lease.lease_owner is null
+         or payout_wallet_lease.lease_expires_at < now())
+  returning true, payout_wallet_lease.lease_owner, payout_wallet_lease.lease_expires_at;
+
+  if not found then
+    return query select false, null::uuid, null::timestamptz;
+  end if;
+end;
+$$;
+
+create or replace function release_payout_wallet_lease(p_wallet_id text, p_owner uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path to public
 as $$
 declare
-  v_owner text;
+  v_count int;
 begin
-  insert into payout_wallet_lease (wallet_id, lease_owner, lease_acquired_at, lease_expires_at, updated_at)
-  values (p_wallet_id, p_owner, now(), now() + make_interval(secs => p_ttl_seconds), now())
-  on conflict (wallet_id)
-  do update set
-    lease_owner = excluded.lease_owner,
-    lease_acquired_at = excluded.lease_acquired_at,
-    lease_expires_at = excluded.lease_expires_at,
-    updated_at = now()
-  where payout_wallet_lease.lease_expires_at <= now() or payout_wallet_lease.lease_owner = p_owner
-  returning lease_owner into v_owner;
-
-  if v_owner is null then
-    return query select false;
-    return;
-  end if;
-
-  return query select true;
-end;
-$$;
-
-create or replace function release_payout_wallet_lease(p_wallet_id text, p_owner text)
-returns void
-language plpgsql
-as $$
-begin
-  delete from payout_wallet_lease
+  update payout_wallet_lease
+  set lease_owner = null,
+      lease_acquired_at = null,
+      lease_expires_at = null
   where wallet_id = p_wallet_id
     and lease_owner = p_owner;
+
+  get diagnostics v_count = row_count;
+  return v_count > 0;
 end;
 $$;
 
-create table if not exists rate_limit_buckets (
-  bucket_key text primary key,
-  window_started_at timestamptz not null default now(),
-  hit_count integer not null default 0
+create table if not exists rate_limits (
+  rl_key text primary key,
+  window_start timestamptz not null default now(),
+  count integer not null default 0
 );
 
 create or replace function check_rate_limit(p_key text, p_limit integer, p_window_seconds integer)
 returns boolean
 language plpgsql
+security definer
+set search_path to public
 as $$
 declare
   v_count integer;
 begin
-  insert into rate_limit_buckets (bucket_key, window_started_at, hit_count)
+  insert into rate_limits (rl_key, window_start, count)
   values (p_key, now(), 1)
-  on conflict (bucket_key) do update set
-    window_started_at = case
-      when rate_limit_buckets.window_started_at <= now() - make_interval(secs => p_window_seconds)
-      then now()
-      else rate_limit_buckets.window_started_at
-    end,
-    hit_count = case
-      when rate_limit_buckets.window_started_at <= now() - make_interval(secs => p_window_seconds)
-      then 1
-      else rate_limit_buckets.hit_count + 1
-    end
-  returning hit_count into v_count;
+  on conflict (rl_key) do update
+    set count = case
+          when rate_limits.window_start < now() - make_interval(secs => p_window_seconds)
+          then 1
+          else rate_limits.count + 1
+        end,
+        window_start = case
+          when rate_limits.window_start < now() - make_interval(secs => p_window_seconds)
+          then now()
+          else rate_limits.window_start
+        end
+  returning count into v_count;
 
   return v_count <= p_limit;
 end;
