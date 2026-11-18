@@ -42,7 +42,10 @@ export async function POST(req: NextRequest) {
     // Require explicit transaction_verified === true as the authoritative gate
     // before attempting to finalize a payment. Do not rely solely on a
     // present txid or status field.
-    const verified = payment?.transaction_verified === true;
+    // NOTE: transaction_verified lives under payment.status, consistent with
+    // every other call site (lib/dispute-resolution.ts).
+    const verified =
+      payment?.status?.transaction_verified === true || payment?.status?.transaction_verified === "true";
 
     if (verified) {
       try {
@@ -53,8 +56,9 @@ export async function POST(req: NextRequest) {
         // Re-fetch the payment and require `developer_completed === true` to
         // confirm that the downstream complete has fully processed before
         // returning a completed status to the client.
+        // (developer_completed lives under payment.status, like the complete route.)
         const after = await getPayment(paymentId);
-        if (after?.developer_completed === true) {
+        if (after?.status?.developer_completed === true) {
           const finalRow = await finalizePaymentLock(hireRequestId, paymentId, txid);
           return NextResponse.json({ status: "completed", paymentId, request: finalRow });
         }

@@ -118,7 +118,16 @@ export async function POST(req: NextRequest) {
         provider_uid: service.owner_uid,
         message,
         deadline: deadline || null,
-        attachments: attachments ?? [],
+        // Client-supplied entries at creation time are reference strings only —
+        // real storage paths are appended after creation by the attachments
+        // upload route (which enforces ownership + path format). Cap the
+        // array so arbitrary blobs can't be persisted.
+        attachments: Array.isArray(attachments)
+          ? attachments
+              .filter((a: unknown): a is string => typeof a === "string" && a.trim().length > 0)
+              .slice(0, 6)
+              .map((a: string) => a.trim().slice(0, 300))
+          : [],
         amount: service.price,
         status: "pending",
       })

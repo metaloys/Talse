@@ -6,16 +6,19 @@ import { MESSAGE_MAX } from "@/lib/services/data";
 import { makeSignedUrl } from "@/lib/storage-utils";
 import { sendInAppNotifications } from "@/lib/pi-platform";
 
-async function assertParticipant(hireRequestId: string, uid: string) {
+async function assertParticipant(hireRequestId: string, uid: string): Promise<NextResponse | null> {
   const { data, error } = await supabaseAdmin
     .from("hire_requests")
     .select("buyer_uid, provider_uid")
     .eq("id", hireRequestId)
     .single();
-  if (error || !data) throw new Response("Hire request not found", { status: 404 });
-  if (data.buyer_uid !== uid && data.provider_uid !== uid) {
-    throw new Response("Forbidden", { status: 403 });
+  if (error || !data) {
+    return NextResponse.json({ error: "Hire request not found" }, { status: 404 });
   }
+  if (data.buyer_uid !== uid && data.provider_uid !== uid) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  return null;
 }
 
 async function validateMessageAttachmentPaths(hireRequestId: string, candidatePaths: unknown) {
@@ -56,7 +59,8 @@ export async function GET(req: NextRequest) {
     const limit = limitParam ? Math.max(1, Math.min(200, Number(limitParam))) : 50;
     if (!hireRequestId) return NextResponse.json({ error: "Missing hireRequestId" }, { status: 400 });
 
-    await assertParticipant(hireRequestId, me.uid);
+    const denied = await assertParticipant(hireRequestId, me.uid);
+    if (denied) return denied;
 
     let query = supabaseAdmin.from("messages").select("*", { count: "exact" }).eq("hire_request_id", hireRequestId);
 
@@ -133,7 +137,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Too many attachments in message" }, { status: 400 });
     }
 
-    await assertParticipant(hireRequestId, me.uid);
+    const denied = await assertParticipant(hireRequestId, me.uid);
+    if (denied) return denied;
 
     const validAttachments = await validateMessageAttachmentPaths(hireRequestId, attachments);
 

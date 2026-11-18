@@ -19,6 +19,17 @@ yarn-error.log*
 # env files
 .env*
 
+# secrets / keys
+*.pem
+*.key
+public-key.txt
+
+# dev-session artifacts
+tsc_after_*.txt
+worktree_outputs/
+.git-worktrees/
+verify-pi-rpc.json
+
 # vercel
 .vercel
 

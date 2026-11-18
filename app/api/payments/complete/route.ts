@@ -41,8 +41,19 @@ export async function POST(req: NextRequest) {
     if (!payment?.status?.developer_completed) {
       await completePayment(paymentId, txid);
     }
+    // The payment must belong to the caller — same trust boundary as approve.
+    if (payment?.user_uid !== me.uid) {
+      return NextResponse.json({ error: "Payment does not belong to this user" }, { status: 403 });
+    }
+    // Prefer the txid recorded by the Pi Platform over the client-supplied one,
+    // so the escrow audit trail cannot be corrupted by arbitrary client values.
+    // (Pi validates the client txid inside completePayment above; when the
+    // payment was already completed in a prior attempt, transaction?.txid is
+    // the authoritative value. Fall back to the submitted txid when Pi has not
+    // attached one yet.)
+    const verifiedTxid = payment?.transaction?.txid ?? txid;
 
-    const request = await finalizePaymentLock(hireRequestId, paymentId, txid);
+    const request = await finalizePaymentLock(hireRequestId, paymentId, verifiedTxid);
     return NextResponse.json({ request });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });

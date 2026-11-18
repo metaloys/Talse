@@ -604,8 +604,12 @@ export async function payoutHireRequest(params: {
     // Compute platform fee and worker payout. Platform fee is retained by the
     // platform/escrow account; blockchain gas is covered separately by the
     // platform wallet (see lib/pi-a2u.ts fee setting).
+    //
+    // Refunds (favor === "buyer") waive the platform fee entirely: the buyer
+    // is made whole with the full gross amount. The fee only applies when the
+    // provider is paid for completed work.
     gross = Number(hr.amount);
-    feePercent = getPlatformFeePercent();
+    feePercent = params.favor === "provider" ? getPlatformFeePercent() : 0;
     platformFee = formatPi(gross * feePercent);
     workerPayout = formatPi(gross - platformFee);
   } catch (preflightErr) {

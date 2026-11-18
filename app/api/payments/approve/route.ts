@@ -26,13 +26,18 @@ export async function POST(req: NextRequest) {
 
     const { data: hr, error: fetchErr } = await supabaseAdmin
       .from("hire_requests")
-      .select("id, buyer_uid, amount, status")
+      .select("id, buyer_uid, amount, status, escrow_request_id")
       .eq("id", hireRequestId)
       .single();
     if (fetchErr || !hr) return NextResponse.json({ error: "Hire request not found" }, { status: 404 });
     if (hr.buyer_uid !== me.uid) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     if (hr.status !== "accepted") {
       return NextResponse.json({ error: `Cannot lock funds from status '${hr.status}'` }, { status: 409 });
+    }
+    // A hire request can only ever be bound to ONE payment. Reject rebinding
+    // so a single Pi payment cannot back multiple hire requests (double payout).
+    if (hr.escrow_request_id && hr.escrow_request_id !== paymentId) {
+      return NextResponse.json({ error: "Hire request is already bound to another payment" }, { status: 409 });
     }
 
     // Cross-check the payment amount against the Pi Platform API directly —
@@ -41,6 +46,16 @@ export async function POST(req: NextRequest) {
     if (Number(payment.amount) !== Number(hr.amount)) {
       return NextResponse.json({ error: "Payment amount does not match hire request" }, { status: 400 });
     }
+    // The payment must belong to the caller — never allow locking a hire
+    // request with someone else's Pi payment (same check as the boost route).
+    if (payment?.user_uid !== me.uid) {
+      return NextResponse.json({ error: "Payment does not belong to this user" }, { status: 403 });
+    }
+
+    // Idempotent retry: already bound to this exact payment — nothing to do.
+    if (hr.escrow_request_id === paymentId) {
+      return NextResponse.json({ ok: true });
+    }
 
     // Idempotency: if the Pi Platform payment record already shows the
     // developer approval flag, skip calling approvePayment() again.
@@ -48,10 +63,24 @@ export async function POST(req: NextRequest) {
       await approvePayment(paymentId);
     }
 
-    await supabaseAdmin
+    // Conditional update: only bind while the request is still 'accepted' and
+    // unbound. If another request/process bound this payment or the status
+    // changed concurrently, the update matches nothing and we refuse.
+    const { data: bound, error: bindErr } = await supabaseAdmin
       .from("hire_requests")
       .update({ escrow_request_id: paymentId })
-      .eq("id", hireRequestId);
+      .eq("id", hireRequestId)
+      .eq("status", "accepted")
+      .is("escrow_request_id", null)
+      .select("id")
+      .single();
+
+    if (bindErr || !bound) {
+      return NextResponse.json(
+        { error: "Could not lock payment to this hire request (already bound or status changed)" },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json({ ok: true });
   } catch (err) {

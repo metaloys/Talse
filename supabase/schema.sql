@@ -248,3 +248,89 @@ alter table profiles add column if not exists location text;
 alter table profiles add column if not exists jobs_completed integer not null default 0;
 alter table profiles add column if not exists total_earned numeric(12,2) not null default 0;
 alter table profiles add column if not exists refunds_against_provider numeric(12,2) not null default 0;
+
+-- ---------------------------------------------------------------------------
+-- Payment binding integrity + wallet lease + rate limiting
+-- (parity with supabase/migrations/006_payment_integrity_v2.sql)
+-- ---------------------------------------------------------------------------
+create unique index if not exists hire_requests_escrow_request_id_uniq
+  on hire_requests (escrow_request_id)
+  where escrow_request_id is not null;
+
+create table if not exists payout_wallet_lease (
+  wallet_id text primary key,
+  lease_owner text not null,
+  lease_acquired_at timestamptz not null default now(),
+  lease_expires_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create or replace function acquire_payout_wallet_lease(p_wallet_id text, p_owner text, p_ttl_seconds integer default 45)
+returns table (acquired boolean)
+language plpgsql
+as $$
+declare
+  v_owner text;
+begin
+  insert into payout_wallet_lease (wallet_id, lease_owner, lease_acquired_at, lease_expires_at, updated_at)
+  values (p_wallet_id, p_owner, now(), now() + make_interval(secs => p_ttl_seconds), now())
+  on conflict (wallet_id)
+  do update set
+    lease_owner = excluded.lease_owner,
+    lease_acquired_at = excluded.lease_acquired_at,
+    lease_expires_at = excluded.lease_expires_at,
+    updated_at = now()
+  where payout_wallet_lease.lease_expires_at <= now() or payout_wallet_lease.lease_owner = p_owner
+  returning lease_owner into v_owner;
+
+  if v_owner is null then
+    return query select false;
+    return;
+  end if;
+
+  return query select true;
+end;
+$$;
+
+create or replace function release_payout_wallet_lease(p_wallet_id text, p_owner text)
+returns void
+language plpgsql
+as $$
+begin
+  delete from payout_wallet_lease
+  where wallet_id = p_wallet_id
+    and lease_owner = p_owner;
+end;
+$$;
+
+create table if not exists rate_limit_buckets (
+  bucket_key text primary key,
+  window_started_at timestamptz not null default now(),
+  hit_count integer not null default 0
+);
+
+create or replace function check_rate_limit(p_key text, p_limit integer, p_window_seconds integer)
+returns boolean
+language plpgsql
+as $$
+declare
+  v_count integer;
+begin
+  insert into rate_limit_buckets (bucket_key, window_started_at, hit_count)
+  values (p_key, now(), 1)
+  on conflict (bucket_key) do update set
+    window_started_at = case
+      when rate_limit_buckets.window_started_at <= now() - make_interval(secs => p_window_seconds)
+      then now()
+      else rate_limit_buckets.window_started_at
+    end,
+    hit_count = case
+      when rate_limit_buckets.window_started_at <= now() - make_interval(secs => p_window_seconds)
+      then 1
+      else rate_limit_buckets.hit_count + 1
+    end
+  returning hit_count into v_count;
+
+  return v_count <= p_limit;
+end;
+$$;

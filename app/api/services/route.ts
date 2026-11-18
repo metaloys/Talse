@@ -48,7 +48,13 @@ export async function GET(req: NextRequest) {
     query = query.eq("category", category);
   }
   if (q) {
-    query = query.or(`title.ilike.%${q}%,description.ilike.%${q}%`);
+    // Strip characters with meaning in the PostgREST `or` grammar — without
+    // this, a search term like "x,active.eq.false" appends arbitrary filters
+    // (e.g. revealing deactivated listings) to the query.
+    const safe = q.replace(/[,()"]/g, " ").trim();
+    if (safe) {
+      query = query.or(`title.ilike.%${safe}%,description.ilike.%${safe}%`);
+    }
   }
 
   try {

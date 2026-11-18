@@ -18,9 +18,19 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (data.buyer_uid !== me.uid && data.provider_uid !== me.uid) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-        // convert storage paths to short-lived signed URLs for attachments
+        // convert storage paths to short-lived signed URLs for attachments.
+        // Only sign paths that belong to THIS hire request ({id}/...): a
+        // participant must never be able to read another hire's uploaded files
+        // by persisting foreign paths. Entries that are not storage paths
+        // (e.g. legacy free-text references) pass through unchanged.
         const attachments = Array.isArray(data.attachments) ? data.attachments : [];
-        const signed = await Promise.all(attachments.map((p: string) => makeSignedUrl(p, 300)));
+        const signed = await Promise.all(
+          attachments.map((p: string) => {
+            const path = typeof p === "string" ? p : "";
+            if (!path.startsWith(`${id}/`)) return path;
+            return makeSignedUrl(path, 300);
+          })
+        );
         const out = { ...data, attachments: signed };
         return NextResponse.json({ request: out });
   } catch (err) {
@@ -103,7 +113,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       update.dispute_filed_by = me.uid;
       update.dispute_reason = typeof reason === "string" ? reason.slice(0, 200) : null;
       update.dispute_details = typeof details === "string" ? details.slice(0, 4000) : null;
-      update.dispute_evidence = Array.isArray(evidence) ? evidence.slice(0, 10) : [];
+      update.dispute_evidence = Array.isArray(evidence)
+        ? evidence
+            .filter((e: unknown): e is string => typeof e === "string" && e.trim().length > 0)
+            .slice(0, 10)
+            .map((e: string) => e.trim().slice(0, 200))
+        : [];
       update.dispute_stage = null; // reset — a fresh dispute always starts unreviewed
       update.admin_note = null;
     }
