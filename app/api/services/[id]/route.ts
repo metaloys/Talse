@@ -65,7 +65,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .select()
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("[services] update failed:", error.message);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
     return NextResponse.json({ service: data });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
@@ -90,7 +93,10 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
 
     const { error } = await supabaseAdmin.from("services").delete().eq("id", id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("[services] delete failed:", error.message);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
     return NextResponse.json({ ok: true });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });

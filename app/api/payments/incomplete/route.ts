@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ incomplete: filtered });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    console.error(err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
+    console.error("[payments:incomplete] failed:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

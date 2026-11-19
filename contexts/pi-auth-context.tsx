@@ -347,7 +347,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
         await loadSDKLite();
         setAuthMessage("Initializing optional Pi services...");
           // Development: mark when we will call SDKLite.init() for diagnosis.
-          // eslint-disable-next-line no-console
+
           console.debug("[PiAuth] about to call SDKLite.init()");
 
           // Initialize SDKLite (keep the SDK state available for the

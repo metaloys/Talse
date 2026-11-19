@@ -23,12 +23,12 @@ export async function GET(req: NextRequest) {
 
     if (buyerResult.error) {
       console.error("[GET /api/profile/financial-summary] buyer query error:", buyerResult.error);
-      return NextResponse.json({ error: buyerResult.error.message }, { status: 500 });
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
     }
 
     if (providerResult.error) {
       console.error("[GET /api/profile/financial-summary] provider query error:", providerResult.error);
-      return NextResponse.json({ error: providerResult.error.message }, { status: 500 });
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
     }
 
     const buyerRows = buyerResult.data ?? [];

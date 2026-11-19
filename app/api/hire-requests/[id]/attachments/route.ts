@@ -110,7 +110,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ paths: uploadedPaths, request: updated });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    console.error(err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
+    console.error("[attachments] POST failed:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ status: "complete_unconfirmed", paymentId });
       } catch (err) {
         console.error("Failed to complete payment during recovery", err);
-        return NextResponse.json({ status: "complete_failed", error: String(err) }, { status: 500 });
+        return NextResponse.json({ status: "complete_failed", error: "Recovery failed" }, { status: 500 });
       }
     }
 
@@ -74,11 +74,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ status: "cancelled", paymentId });
     } catch (err) {
       console.error("Failed to cancel stale payment", err);
-      return NextResponse.json({ status: "cancel_failed", error: String(err) }, { status: 500 });
+      return NextResponse.json({ status: "cancel_failed", error: "Cancel failed" }, { status: 500 });
     }
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    console.error(err);
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
+    console.error("[payments:recover] failed:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

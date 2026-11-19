@@ -130,7 +130,10 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .select()
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("[hire-requests] update failed:", error.message);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
     // Fire-and-forget in-app notification to the other participant
     try {
       const otherUid = existing.buyer_uid === me.uid ? existing.provider_uid : existing.buyer_uid;

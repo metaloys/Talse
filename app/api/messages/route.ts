@@ -67,7 +67,10 @@ export async function GET(req: NextRequest) {
     if (!beforeParam) {
       // return the most recent `limit` messages
       const { data, count, error } = await query.order("created_at", { ascending: false }).range(0, limit - 1);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        console.error("[messages] list failed:", error.message);
+        return NextResponse.json({ error: "Internal error" }, { status: 500 });
+      }
       const total = typeof count === "number" ? count : (Array.isArray(data) ? data.length : 0);
       const hasMore = (Array.isArray(data) ? data.length : 0) < total;
       const slice = (data as any[]).map((m) => ({ ...m }));
@@ -95,7 +98,10 @@ export async function GET(req: NextRequest) {
       }
 
       const { data, error } = await query.order("created_at", { ascending: false }).lt("created_at", cursorTime).range(0, limit - 1);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        console.error("[messages] cursor list failed:", error.message);
+        return NextResponse.json({ error: "Internal error" }, { status: 500 });
+      }
       const slice = (data as any[]).map((m) => ({ ...m }));
       const signedMsgs = await Promise.all(
         slice.map(async (m) => {
@@ -153,7 +159,10 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("[messages] send failed:", error.message);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
     // Fire-and-forget in-app notification to the other participant
     try {
       const { data: hr } = await supabaseAdmin

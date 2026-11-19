@@ -102,11 +102,11 @@ async function releaseWalletLease(owner: string): Promise<void> {
     if (error) {
       // Preserve the existing payout behavior and never force a stale worker to
       // clear a newer lease. This is best-effort cleanup only.
-      // eslint-disable-next-line no-console
+
       console.warn("[Payout] failed to release wallet lease:", error.message);
     }
   } catch (releaseErr) {
-    // eslint-disable-next-line no-console
+
     console.warn("[Payout] release wallet lease exception:", releaseErr instanceof Error ? releaseErr.message : String(releaseErr));
   }
 }
@@ -234,6 +234,30 @@ export async function reconcileStalePayoutLock(hireRequestId: string, favor: "pr
     }
   }
 
+  // Reconciliation runs while the hire request's payout lock is stale, but a
+  // payout worker could still hold the WALLET lease and be mid-submitting an
+  // on-chain transaction. Acquire the wallet lease before acting: if another
+  // process is actively paying out, report the request as "active" instead of
+  // cancelling its payments underneath it.
+  const leaseOwner = randomUUID();
+  let leaseAcquired = false;
+  try {
+    leaseAcquired = await acquireWalletLease(leaseOwner);
+  } catch (leaseErr) {
+    await supabaseAdmin
+      .from("hire_requests")
+      .update({ payout_status: "manual_review" })
+      .eq("id", hireRequestId);
+    return {
+      action: "manual_review",
+      request: hr,
+      error: `Wallet lease check failed: ${leaseErr instanceof Error ? leaseErr.message : String(leaseErr)}`,
+    };
+  }
+  if (!leaseAcquired) {
+    return { action: "active", request: hr as any };
+  }
+
   try {
     const incomplete = await getIncompleteServerPayments();
     const matches = (incomplete || []).filter((p: any) => {
@@ -279,7 +303,7 @@ export async function reconcileStalePayoutLock(hireRequestId: string, favor: "pr
           await sendInAppNotifications([{ title, body, user_uid: userUid, subroute: `/hire-requests/${hireRequestId}` }]);
         } catch (notifyErr) {
           // Non-blocking: do not fail payout if notifications fail.
-          // eslint-disable-next-line no-console
+
           console.error("[Notifications] failed to send payout notification:", notifyErr instanceof Error ? notifyErr.message : String(notifyErr));
         }
         return { action: "resolved", request: resolvedReq };
@@ -359,6 +383,8 @@ export async function reconcileStalePayoutLock(hireRequestId: string, favor: "pr
       request: hr,
       error: reconcileErr instanceof Error ? reconcileErr.message : "Payout reconciliation failed",
     };
+  } finally {
+    await releaseWalletLease(leaseOwner);
   }
 }
 
@@ -533,7 +559,7 @@ export async function payoutHireRequest(params: {
             await sendInAppNotifications([{ title, body, user_uid: userUid, subroute: `/hire-requests/${params.hireRequestId}` }]);
           } catch (notifyErr) {
             // Non-blocking: log and continue
-            // eslint-disable-next-line no-console
+
             console.error("[Notifications] failed to send payout notification:", notifyErr instanceof Error ? notifyErr.message : String(notifyErr));
           }
           return data;
@@ -544,7 +570,7 @@ export async function payoutHireRequest(params: {
               .update({ payout_status: "manual_review" })
               .eq("id", hr.id);
           } catch (markErr) {
-            // eslint-disable-next-line no-console
+
             console.error("[Payout] failed to mark manual_review after recovery failure:", markErr);
           }
           throw new PayoutRecoveryFailure(recoveryErr);
@@ -572,14 +598,14 @@ export async function payoutHireRequest(params: {
           .single();
         if (refErr || !refHr) {
           // Skip acting on payments that reference missing hire records
-          // eslint-disable-next-line no-console
+
           console.warn("[Payout] skipping payment referencing missing hire_request:", identifier, refId);
           continue;
         }
         const allowedStatuses = ["delivered", "disputed", "locked"];
         if (!allowedStatuses.includes(String(refHr.status))) {
           // Skip payments whose referenced hire_request is not in an allowed state
-          // eslint-disable-next-line no-console
+
           console.warn("[Payout] skipping payment referencing hire_request with ineligible status:", identifier, refId, refHr.status);
           continue;
         }
@@ -587,7 +613,7 @@ export async function payoutHireRequest(params: {
         if (txVerified) {
           // Blocker has funds moved on-chain for a different hire request — must
           // not proceed. Return a clear error for reconciliation.
-          // eslint-disable-next-line no-console
+
           console.error("[Payout] blocked by unreconciled payment:", JSON.stringify({ identifier, hireRequestId: b.metadata?.hireRequestId }));
           throw new PayoutBlockedByUnreconciledPaymentError(`Blocked by unreconciled payment ${identifier} for hire ${b.metadata?.hireRequestId}`);
         }
@@ -711,7 +737,7 @@ export async function payoutHireRequest(params: {
       }
       await completePayment(paymentId, txhash);
     } catch (completeErr) {
-      // eslint-disable-next-line no-console
+
       console.error("[Payout] COMPLETE_PAYMENT_FAILED: paymentId=", paymentId, "txhash=", txhash, "error=", completeErr);
       await supabaseAdmin.from("hire_requests").update({ payout_status: "manual_review" }).eq("id", hr.id);
       throw new Error(`Completing Pi payment failed after submit: ${completeErr instanceof Error ? completeErr.message : String(completeErr)}`);
@@ -757,7 +783,7 @@ export async function payoutHireRequest(params: {
       await sendInAppNotifications([{ title, body, user_uid: userUid, subroute: `/hire-requests/${params.hireRequestId}` }]);
     } catch (notifyErr) {
       // Non-blocking: log and continue
-      // eslint-disable-next-line no-console
+
       console.error("[Notifications] failed to send payout notification:", notifyErr instanceof Error ? notifyErr.message : String(notifyErr));
     }
     return data;

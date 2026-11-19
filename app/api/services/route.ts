@@ -38,8 +38,19 @@ export async function GET(req: NextRequest) {
     .order("created_at", { ascending: false });
 
   // owner param bypasses the active-only filter so a provider can see their
-  // own inactive/draft listings on their profile screen.
+  // own inactive/draft listings on their profile screen. That means it
+  // exposes non-public data — require a verified token and restrict it to
+  // the caller's own uid (unauthenticated callers get the public browse path).
   if (owner) {
+    try {
+      const me = await verifyPiToken(req.headers.get("authorization"));
+      if (owner !== me.uid) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    } catch (err) {
+      if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
     query = query.eq("owner_uid", owner);
   } else {
     query = query.eq("active", true);
@@ -59,10 +70,14 @@ export async function GET(req: NextRequest) {
 
   try {
     // Owner requests are returned unchanged (no pagination) to preserve
-    // byte-identical response shape for owner screens.
+    // byte-identical response shape for owner screens — capped at 200 rows
+    // as an exfiltration guard.
     if (owner) {
-      const { data, error } = await query;
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      const { data, error } = await query.range(0, 199);
+      if (error) {
+        console.error("[services] owner query failed:", error.message);
+        return NextResponse.json({ error: "Internal error" }, { status: 500 });
+      }
       return NextResponse.json({ services: data });
     }
 
@@ -72,14 +87,18 @@ export async function GET(req: NextRequest) {
 
     const { data, count, error } = await query.range(from, to);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("[services] browse query failed:", error.message);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
 
     const total = typeof count === "number" ? count : (Array.isArray(data) ? data.length : 0);
     const hasMore = from + (Array.isArray(data) ? data.length : 0) < total;
 
     return NextResponse.json({ services: data, page, perPage, total, hasMore });
   } catch (err) {
-    return NextResponse.json({ error: (err as Error).message ?? "Internal error" }, { status: 500 });
+    console.error("[services] GET failed:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
 
@@ -125,7 +144,10 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("[services] create failed:", error.message);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
     return NextResponse.json({ service: data }, { status: 201 });
   } catch (err) {
     if (err instanceof SuspendedError) {

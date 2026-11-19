@@ -32,6 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (err instanceof PayoutNotConfiguredError) return NextResponse.json({ error: err.message }, { status: err.status });
     if (err instanceof PayoutWalletBusyError || err instanceof PayoutWalletLeaseLostError)
       return NextResponse.json({ error: err.message }, { status: err.status });
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
+    console.error("[release] failed:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

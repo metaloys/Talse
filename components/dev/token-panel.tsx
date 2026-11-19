@@ -6,9 +6,9 @@ import { usePiAuth } from "@/contexts/pi-auth-context";
 // Single, well-formed dev-only token panel. Guard at runtime so it never
 // renders in production even if imported accidentally.
 export default function DevTokenPanel(): React.ReactElement | null {
-  if (process.env.NODE_ENV === "production") return null;
-
   const { accessToken } = usePiAuth();
+
+  if (process.env.NODE_ENV === "production") return null;
 
   const handleCopy = async () => {
     try {

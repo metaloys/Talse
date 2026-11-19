@@ -42,7 +42,10 @@ export async function GET(req: NextRequest) {
     const to = from + perPage - 1;
 
     const { data, count, error } = await query.range(from, to);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("[hire-requests] list failed:", error.message);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
 
     const total = typeof count === "number" ? count : (Array.isArray(data) ? data.length : 0);
     const hasMore = from + (Array.isArray(data) ? data.length : 0) < total;
@@ -134,7 +137,10 @@ export async function POST(req: NextRequest) {
       .select()
       .single();
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      console.error("[hire-requests] create failed:", error.message);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
     return NextResponse.json({ request: data }, { status: 201 });
   } catch (err) {
     if (err instanceof SuspendedError) return NextResponse.json({ error: err.message }, { status: err.status });

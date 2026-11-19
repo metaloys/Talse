@@ -19,9 +19,22 @@ create policy "services are publicly readable"
   on services for select
   using (active = true);
 
-create policy "profiles are publicly readable"
-  on profiles for select
-  using (true);
+-- profiles: NO direct public policy. The blanket `using (true)` policy exposed
+-- every column (wallet_address, suspended_at, suspension_reason) to the anon
+-- key. Public identity/reputation data is exposed through the
+-- public_profiles view instead (SELECT-only, safe columns); all server reads
+-- go through the service role.
+revoke all privileges on profiles from anon;
+revoke all privileges on profiles from authenticated;
+
+create or replace view public_profiles as
+  select pi_uid, username, display_name, bio, avatar_url,
+         rating_avg, rating_count, jobs_completed, refunds_against_provider,
+         total_earned, location, created_at
+  from profiles;
+
+grant select on public_profiles to anon, authenticated;
+revoke insert, update, delete, truncate, references, trigger on public_profiles from anon, authenticated;
 
 create policy "reviews are publicly readable"
   on reviews for select

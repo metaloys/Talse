@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ request });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
+    console.error("[payments:complete] failed:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

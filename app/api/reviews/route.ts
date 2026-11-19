@@ -34,7 +34,10 @@ export async function GET(req: NextRequest) {
   }
 
   const { data, error } = await query;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    console.error("[reviews] list failed:", error.message);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
 
   const out = (data || []).map((r: any) => ({
     ...r,
@@ -94,7 +97,8 @@ export async function POST(req: NextRequest) {
     if (error) {
       // unique constraint on hire_request_id -> already reviewed
       if (error.code === "23505") return NextResponse.json({ error: "Already reviewed" }, { status: 409 });
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      console.error("[reviews] create failed:", error.message);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
     }
     return NextResponse.json({ review: data }, { status: 201 });
   } catch (err) {

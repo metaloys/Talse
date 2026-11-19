@@ -74,7 +74,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       .update({ boosted_until: boostedUntil })
       .eq("id", id)
       .eq("owner_uid", service.owner_uid);
-    if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+    if (updateErr) {
+      console.error("[boost] update failed:", updateErr.message);
+      return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    }
 
     await supabaseAdmin.from("boost_purchases").insert({
         service_id: id,
@@ -87,6 +90,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ boostedUntil });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
+    console.error("[boost] POST failed:", err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
