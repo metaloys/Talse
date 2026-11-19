@@ -327,6 +327,10 @@ export function ProfileScreen({
               Log out
             </Button>
           </div>
+
+          <p className="px-4 pt-3 text-center text-[10px] tracking-wide text-muted-foreground">
+            Build {process.env.NEXT_PUBLIC_BUILD_SHA || "local"}
+          </p>
         </div>
       )}
 
