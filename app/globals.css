@@ -115,6 +115,37 @@
     linear-gradient(180deg, oklch(0.97 0.02 300), oklch(1 0 0));
 }
 
+/* section eyebrow label */
+.ps-eyebrow {
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+}
+
+/* loading placeholder */
+.ps-skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--secondary) 0%,
+    var(--muted) 50%,
+    var(--secondary) 100%
+  );
+  background-size: 200% 100%;
+  animation: ps-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes ps-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ps-skeleton { animation: none; }
+}
+
 /* clamp helpers */
 .ps-clamp-1 {
   display: -webkit-box;

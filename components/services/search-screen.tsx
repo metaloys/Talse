@@ -16,7 +16,7 @@ import {
 } from "@/lib/services/data";
 import { useServices } from "@/contexts/services-context";
 import { backendApi } from "@/lib/backend-api";
-import { Button, cx, EmptyState, IconButton } from "./ui";
+import { Button, cx, EmptyState, IconButton, ServiceGridSkeleton } from "./ui";
 import { CategoryIcon, IconClose, IconInbox, IconSearch, IconSliders } from "./icons";
 import { ServiceCard } from "./service-card";
 
@@ -254,11 +254,7 @@ export function SearchScreen({
         </div>
 
         {isSearchActive && serverLoading && serverRows === null ? (
-          <EmptyState
-            icon={<IconSearch size={26} />}
-            title="Searching services…"
-            message="Looking for matches from the live server results."
-          />
+          <ServiceGridSkeleton count={4} />
         ) : results.length === 0 ? (
           <EmptyState
             icon={<IconInbox size={26} />}

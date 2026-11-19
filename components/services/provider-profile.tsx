@@ -2,7 +2,6 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  APP_NAME,
   DISCLAIMER,
   formatMonthYear,
   hueFromString,
@@ -12,8 +11,9 @@ import {
 import { useServices } from "@/contexts/services-context";
 import { Overlay } from "./feedback";
 import { Avatar, Card, EmptyState, Pill } from "./ui";
-import { IconCalendar, IconFlag, IconInbox, IconPin } from "./icons";
+import { IconCalendar, IconFlag, IconInbox, IconPin, IconStar } from "./icons";
 import { ServiceRow } from "./service-card";
+import { ReportSheet } from "./report-sheet";
 
 function renderSuccessRate(jobsCompleted: number, refunds: number) {
   const total = jobsCompleted + refunds;
@@ -31,7 +31,7 @@ function renderEarningsBadge(totalEarned: number) {
     else break;
   }
   if (!pick) return null;
-  return <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary-foreground">{`${pick}+ π earned`}</span>;
+  return <span className="inline-flex items-center rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary">{`${pick}+ π earned`}</span>;
 }
 
 export function ProviderProfile({
@@ -45,11 +45,12 @@ export function ProviderProfile({
   onClose: () => void;
   onOpenService: (service: Service) => void;
 }) {
-  const { getProvider, servicesByProvider, pushToast } = useServices();
+  const { getProvider, servicesByProvider } = useServices();
 
   const provider = providerId ? getProvider(providerId) : undefined;
   const services = providerId ? servicesByProvider(providerId) : [];
   const [reviews, setReviews] = useState<any[] | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -99,13 +100,18 @@ export function ProviderProfile({
                     {provider.ratingCount === 0 ? (
                       <span className="text-xs text-muted-foreground">No reviews yet</span>
                     ) : (
-                      <span className="text-xs text-muted-foreground">★ {provider.ratingAvg.toFixed(1)} ({provider.ratingCount} review{provider.ratingCount === 1 ? "" : "s"})</span>
+                      <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                        <IconStar size={12} filled className="text-accent-foreground" />
+                        {provider.ratingAvg.toFixed(1)} ({provider.ratingCount})
+                      </span>
                     )}
-                    <span className="text-xs text-muted-foreground">Jobs: {provider.jobsCompleted ?? 0}</span>
+                    <span className="text-xs text-muted-foreground">{provider.jobsCompleted ?? 0} jobs</span>
                     <span className="text-xs text-muted-foreground">{renderSuccessRate(provider.jobsCompleted ?? 0, provider.refundsAgainstProvider ?? 0)}</span>
-                    {renderEarningsBadge(provider.totalEarned ?? 0)}
                   </span>
                 </div>
+                {(provider.totalEarned ?? 0) >= 100 && (
+                  <div className="mt-2">{renderEarningsBadge(provider.totalEarned ?? 0)}</div>
+                )}
               </div>
             </div>
             {provider.location && (
@@ -162,7 +168,7 @@ export function ProviderProfile({
 
           {!provider.isMe && (
             <button
-              onClick={() => pushToast(`Report received. Thanks for helping keep ${APP_NAME} safe.`, "info")}
+              onClick={() => setReportOpen(true)}
               className="ps-press flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
             >
               <IconFlag size={14} />
@@ -171,6 +177,14 @@ export function ProviderProfile({
           )}
 
           <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">{DISCLAIMER}</p>
+
+          <ReportSheet
+            open={reportOpen}
+            onClose={() => setReportOpen(false)}
+            targetType="user"
+            targetId={providerId ?? ""}
+            targetLabel={provider.name}
+          />
         </div>
       )}
     </Overlay>

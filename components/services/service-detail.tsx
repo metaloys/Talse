@@ -24,6 +24,7 @@ import {
 } from "./icons";
 import { hueFromString } from "@/lib/services/data";
 import { BoostListing } from "./boost-listing";
+import { ReportSheet } from "./report-sheet";
 
 export function ServiceDetail({
   service,
@@ -38,8 +39,9 @@ export function ServiceDetail({
   onHire: (service: Service) => void;
   onOpenProvider: (id: string) => void;
 }) {
-  const { pushToast, getService, getProvider } = useServices();
+  const { getService, getProvider } = useServices();
   const [active, setActive] = useState(0);
+  const [reportOpen, setReportOpen] = useState(false);
 
   const persistedService = service ? getService(service.id) : undefined;
   if (!persistedService) return null;
@@ -129,8 +131,13 @@ export function ServiceDetail({
               const receive = Math.round((service.price - fee) * 100) / 100;
               return (
                 <div>
-                  <div className="font-medium">You pay: {formatPi(service.price)}</div>
-                  <div className="text-xs">Platform fee ({Math.round(pct * 100)}%): -{formatPi(fee)} · You receive: {formatPi(receive)}</div>
+                  <div className="font-medium">
+                    You pay {formatPi(service.price)} · the provider receives {formatPi(receive)}
+                  </div>
+                  <div className="text-xs">
+                    {formatPi(service.price)} is held in escrow until you confirm delivery. The {Math.round(pct * 100)}%
+                    platform fee ({formatPi(fee)}) is deducted from the provider&apos;s payout.
+                  </div>
                   <div className="text-xs">{BLOCKCHAIN_GAS_LABEL}</div>
                 </div>
               );
@@ -166,7 +173,7 @@ export function ServiceDetail({
           </Card>
 
           <button
-            onClick={() => pushToast(`Report received. Thanks for helping keep ${APP_NAME} safe.`, "info")}
+            onClick={() => setReportOpen(true)}
             className="ps-press flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
           >
             <IconFlag size={14} />
@@ -199,6 +206,14 @@ export function ServiceDetail({
           </div>
         </div>
       )}
+
+      <ReportSheet
+        open={reportOpen}
+        onClose={() => setReportOpen(false)}
+        targetType="service"
+        targetId={service.id}
+        targetLabel={service.title}
+      />
     </Overlay>
   );
 }

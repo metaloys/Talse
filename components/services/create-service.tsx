@@ -15,6 +15,7 @@ import {
   type Service,
 } from "@/lib/services/data";
 import { useServices } from "@/contexts/services-context";
+import { compressImageFile, ACCEPTED_IMAGE_TYPES } from "@/lib/image-compress";
 import { Overlay } from "./feedback";
 import { Button, Card, cx, Field, IconButton, Select, TextArea, TextInput } from "./ui";
 import { CategoryIcon, IconImage, IconPlus, IconTrash } from "./icons";
@@ -30,7 +31,7 @@ export function CreateService({
   onClose: () => void;
   onSaved: (service: Service | null) => void;
 }) {
-  const { addService, updateService } = useServices();
+  const { addService, updateService, pushToast } = useServices();
 
   const [title, setTitle] = useState("");
   const [category, setCategory] = useState<CategoryId>("design");
@@ -41,6 +42,7 @@ export function CreateService({
   const [imgDraft, setImgDraft] = useState("");
   const [showErrors, setShowErrors] = useState(false);
   const [lastOpen, setLastOpen] = useState(false);
+  const [processingImages, setProcessingImages] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -82,19 +84,26 @@ export function CreateService({
     setImgDraft("");
   };
 
-  const addUploadedImages = (files: FileList | null) => {
+  const addUploadedImages = async (files: FileList | null) => {
     if (!files) return;
-    Array.from(files)
-      .filter((file) => file.type.startsWith("image/"))
-      .slice(0, MAX_IMAGES - images.length)
-      .forEach((file) => {
-        const reader = new FileReader();
-        reader.onload = () => {
-          const value = typeof reader.result === "string" ? reader.result : "";
-          if (value) setImages((prev) => (prev.length >= MAX_IMAGES ? prev : [...prev, value]));
-        };
-        reader.readAsDataURL(file);
-      });
+    const chosen = Array.from(files).slice(0, Math.max(0, MAX_IMAGES - images.length));
+    if (!chosen.length) return;
+
+    setProcessingImages(true);
+    try {
+      for (const file of chosen) {
+        try {
+          // Downscale + re-encode before it becomes a data URL: these strings
+          // are stored inline and re-sent with every catalogue request.
+          const value = await compressImageFile(file);
+          setImages((prev) => (prev.length >= MAX_IMAGES ? prev : [...prev, value]));
+        } catch (err) {
+          pushToast(err instanceof Error ? err.message : "That image could not be added.", "warning");
+        }
+      }
+    } finally {
+      setProcessingImages(false);
+    }
   };
 
   const [saving, setSaving] = useState(false);
@@ -199,12 +208,15 @@ export function CreateService({
           </Field>
         </div>
 
-        <Field label={`Portfolio images (${images.length}/${MAX_IMAGES})`} hint="Describe each image and we'll generate a matching placeholder to showcase your work.">
+        <Field
+          label={`Portfolio images (${images.length}/${MAX_IMAGES})`}
+          hint="JPG, PNG or WebP up to 12 MB — images are resized for you. You can also describe an image and we'll use a matching placeholder."
+        >
           {images.length > 0 && (
             <div className="mb-2 grid grid-cols-4 gap-2">
               {images.map((q, i) => (
                 <div key={i} className="relative aspect-square overflow-hidden rounded-lg border border-border bg-secondary">
-                  <img src={q.startsWith("data:image/") ? q : serviceImage(q, 160, 160)} alt="Portfolio example" className="h-full w-full object-cover" />
+                  <img src={q.startsWith("data:image/") ? q : serviceImage(q, 160, 160)} alt={`Portfolio image ${i + 1}`} className="h-full w-full object-cover" />
                   <button
                     aria-label="Remove image"
                     onClick={() => setImages((prev) => prev.filter((_, j) => j !== i))}
@@ -220,14 +232,15 @@ export function CreateService({
             <div className="space-y-2">
               <label className="flex h-11 cursor-pointer items-center justify-center rounded-xl border border-dashed border-primary/40 bg-primary-soft px-3 text-sm font-semibold text-primary">
                 <IconImage size={16} />
-                <span className="ml-2">Upload image</span>
+                <span className="ml-2">{processingImages ? "Optimising…" : "Upload image"}</span>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept={ACCEPTED_IMAGE_TYPES.join(",")}
                   multiple
+                  disabled={processingImages}
                   className="sr-only"
                   onChange={(e) => {
-                    addUploadedImages(e.target.files);
+                    void addUploadedImages(e.target.files);
                     e.currentTarget.value = "";
                   }}
                 />

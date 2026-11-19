@@ -5,12 +5,11 @@ import {
   APP_TAGLINE,
   CATEGORIES,
   DISCLAIMER,
-  FEATURED_IDS,
   type CategoryId,
   type Service,
 } from "@/lib/services/data";
 import { useServices } from "@/contexts/services-context";
-import { Button, Card, cx } from "./ui";
+import { Button, Card, EmptyState, ServiceGridSkeleton } from "./ui";
 import { CategoryIcon, IconArrowRight, IconLogo, IconPlus, IconSparkle } from "./icons";
 import { ServiceCard } from "./service-card";
 
@@ -25,12 +24,15 @@ export function HomeScreen({
   onCreate: () => void;
   onSeeAll: () => void;
 }) {
-  const { allServices, username, hasMore, loadMoreServices } = useServices();
+  const { allServices, username, hasMore, loadMoreServices, ready } = useServices();
 
-  const featured = FEATURED_IDS.map((id) => allServices.find((s) => s.id === id)).filter(
-    (s): s is Service => Boolean(s),
-  );
+  // Promoted listings come from paid boosts (boosted_until), not a hardcoded
+  // list — a static id list can never match real rows.
+  const now = Date.now();
+  const promoted = allServices.filter((s) => (s.boostedUntil ?? 0) > now).slice(0, 6);
   const recent = allServices.slice(0, 6);
+  const isLoading = !ready && allServices.length === 0;
+  const isEmpty = ready && allServices.length === 0;
 
   return (
     <div className="mx-auto max-w-md pb-24">
@@ -81,15 +83,15 @@ export function HomeScreen({
           </div>
         </section>
 
-        {/* featured */}
-        {featured.length > 0 && (
+        {/* promoted */}
+        {promoted.length > 0 && (
           <section>
             <div className="mb-2.5 flex items-center gap-1.5">
               <IconSparkle size={16} className="text-accent-foreground" />
-              <h3 className="text-sm font-bold text-foreground">Featured services</h3>
+              <h3 className="text-sm font-bold text-foreground">Promoted services</h3>
             </div>
             <div className="ps-no-scrollbar -mx-1 flex gap-3 overflow-x-auto px-1 pb-1">
-              {featured.map((s) => (
+              {promoted.map((s) => (
                 <ServiceCard key={s.id} service={s} onOpen={() => onOpenService(s)} className="w-44 shrink-0" />
               ))}
             </div>
@@ -100,16 +102,35 @@ export function HomeScreen({
         <section>
           <div className="mb-2.5 flex items-center justify-between">
             <h3 className="text-sm font-bold text-foreground">Recent listings</h3>
-            <button onClick={onSeeAll} className="ps-press inline-flex items-center gap-1 text-sm font-semibold text-primary">
-              See all
-              <IconArrowRight size={15} />
-            </button>
+            {recent.length > 0 && (
+              <button onClick={onSeeAll} className="ps-press inline-flex items-center gap-1 text-sm font-semibold text-primary">
+                See all
+                <IconArrowRight size={15} />
+              </button>
+            )}
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            {recent.map((s) => (
-              <ServiceCard key={s.id} service={s} onOpen={() => onOpenService(s)} />
-            ))}
-          </div>
+
+          {isLoading ? (
+            <ServiceGridSkeleton count={4} />
+          ) : isEmpty ? (
+            <EmptyState
+              icon={<IconPlus size={26} />}
+              title="No services yet"
+              message="The marketplace is just getting started. Be the first to offer something."
+              action={
+                <Button size="sm" onClick={onCreate}>
+                  Create a service
+                </Button>
+              }
+            />
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {recent.map((s) => (
+                <ServiceCard key={s.id} service={s} onOpen={() => onOpenService(s)} />
+              ))}
+            </div>
+          )}
+
           {hasMore && (
             <div className="mt-4 flex justify-center">
               <Button onClick={() => loadMoreServices()}>

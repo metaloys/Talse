@@ -149,8 +149,8 @@ export function ConfirmSheet({
           <button
             onClick={onConfirm}
             className={cx(
-              "ps-press h-11 flex-1 rounded-xl text-sm font-semibold text-white",
-              tone === "danger" ? "bg-destructive" : "bg-primary",
+              "ps-press h-11 flex-1 rounded-xl text-sm font-semibold",
+              tone === "danger" ? "bg-destructive text-destructive-foreground" : "bg-primary text-primary-foreground",
             )}
           >
             {confirmLabel}

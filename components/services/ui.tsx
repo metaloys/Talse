@@ -22,7 +22,7 @@ const BTN_VARIANT: Record<ButtonVariant, string> = {
 };
 
 const BTN_SIZE: Record<ButtonSize, string> = {
-  sm: "h-9 px-3 text-sm rounded-lg gap-1.5",
+  sm: "h-10 px-3.5 text-sm rounded-lg gap-1.5",
   md: "h-11 px-4 text-sm rounded-xl gap-2",
   lg: "h-12 px-5 text-base rounded-xl gap-2",
 };
@@ -285,6 +285,37 @@ export function EmptyState({
       <h3 className="text-base font-bold text-foreground">{title}</h3>
       {message && <p className="mt-1 max-w-xs text-sm text-muted-foreground">{message}</p>}
       {action && <div className="mt-4">{action}</div>}
+    </div>
+  );
+}
+
+// ---- Skeletons ----
+export function SkeletonBlock({ className }: { className?: string }) {
+  return <div aria-hidden="true" className={cx("ps-skeleton rounded-lg", className)} />;
+}
+
+export function ServiceCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
+      <div className="ps-skeleton aspect-[4/3] w-full" />
+      <div className="space-y-2 p-3">
+        <SkeletonBlock className="h-3.5 w-4/5 rounded-md" />
+        <SkeletonBlock className="h-3 w-2/5 rounded-md" />
+        <div className="flex items-center justify-between pt-1">
+          <SkeletonBlock className="h-4 w-12 rounded-md" />
+          <SkeletonBlock className="h-5 w-16 rounded-full" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ServiceGridSkeleton({ count = 4 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-2 gap-3" aria-hidden="true">
+      {Array.from({ length: count }).map((_, i) => (
+        <ServiceCardSkeleton key={i} />
+      ))}
     </div>
   );
 }

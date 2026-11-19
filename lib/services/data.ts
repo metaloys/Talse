@@ -397,10 +397,10 @@ export function timeAgo(ts: number): string {
 // ---------- status meta ----------
 export const STATUS_META: Record<RequestStatus, { label: string; tone: "warning" | "success" | "danger" }> = {
   pending: { label: "Pending", tone: "warning" },
-  accepted: { label: "Accepted \u2014 awaiting payment", tone: "warning" },
+  accepted: { label: "Accepted", tone: "warning" },
   declined: { label: "Declined", tone: "danger" },
-  locked: { label: "Paid \u2014 in progress", tone: "success" },
-  delivered: { label: "Delivered \u2014 awaiting confirmation", tone: "warning" },
+  locked: { label: "In escrow", tone: "success" },
+  delivered: { label: "Delivered", tone: "warning" },
   released: { label: "Completed", tone: "success" },
   disputed: { label: "Disputed", tone: "danger" },
   refunded: { label: "Refunded", tone: "danger" },
@@ -604,10 +604,7 @@ export const SEED_SERVICES: Service[] = SEED_SERVICE_INPUTS.map((s) => ({
 
 export const SEED_SERVICE_ID_SET = new Set<string>(SEED_SERVICES.map((s) => s.id));
 
-// featured = a curated subset; recent = newest overall
-export const FEATURED_IDS = ["svc-logo", "svc-website", "svc-plan", "svc-tutor"];
-
-// seed incoming-request authors (simulated customers for the connected Pioneer's own listings)
+// Seed incoming-request authors (simulated customers for the connected Pioneer's own listings)
 export const SEED_CUSTOMER_NAMES = ["Nadia P.", "Sam O.", "Wei Chen", "Elena R."];
 export const SEED_REQUEST_MESSAGES = [
   "Hi! I'm interested in this. Could you start next week? Happy to share more details.",

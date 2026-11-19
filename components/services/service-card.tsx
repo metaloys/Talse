@@ -9,7 +9,7 @@ import {
 } from "@/lib/services/data";
 // fee breakdown removed from card view per UX request
 import { cx, Pill } from "./ui";
-import { CategoryIcon, IconClock } from "./icons";
+import { CategoryIcon, IconBolt, IconClock } from "./icons";
 
 export function ServiceCard({
   service,
@@ -22,6 +22,7 @@ export function ServiceCard({
 }) {
   const cat = CATEGORY_MAP[service.category];
   const img = service.images[0];
+  const promoted = (service.boostedUntil ?? 0) > Date.now();
   return (
     <button
       onClick={onOpen}
@@ -33,7 +34,7 @@ export function ServiceCard({
       <div className="relative aspect-[4/3] w-full overflow-hidden bg-secondary">
         <img
           src={img ? serviceImage(img, 600, 450) : "/placeholder.svg?height=450&width=600&query=service"}
-          alt=""
+          alt={service.title || "Service image"}
           className="h-full w-full object-cover"
           loading="lazy"
         />
@@ -44,6 +45,12 @@ export function ServiceCard({
           <CategoryIcon id={service.category} size={13} />
           {cat.short}
         </span>
+        {promoted && (
+          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-foreground/85 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-background backdrop-blur">
+            <IconBolt size={11} />
+            Promoted
+          </span>
+        )}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-3">
         <h3 className="ps-clamp-2 text-sm font-semibold leading-snug text-foreground">{service.title}</h3>
@@ -80,7 +87,7 @@ export function ServiceRow({
       <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-secondary">
         <img
           src={img ? serviceImage(img, 160, 160) : "/placeholder.svg?height=160&width=160&query=service"}
-          alt=""
+          alt={service.title || "Service image"}
           className="h-full w-full object-cover"
           loading="lazy"
         />

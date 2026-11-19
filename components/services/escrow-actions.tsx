@@ -207,11 +207,11 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
 
   if (req.direction === "outgoing" && req.status === "delivered") {
     return (
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2">
         <Button
           variant="success"
           size="sm"
-          className="flex-1"
+          className="w-full"
           disabled={busy}
           onClick={() =>
             withBusy(async () => {
@@ -227,6 +227,10 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
         {showDisputeForm ? (
           <div className="flex w-full flex-col gap-2 rounded-xl border border-border bg-secondary/30 p-3">
             <div className="text-xs font-semibold text-foreground">Submit dispute</div>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              An admin reviews the evidence from both sides and releases the escrow to one party. The funds stay locked
+              until then.
+            </p>
             <input
               value={disputeReason}
               onChange={(e) => setDisputeReason(e.target.value)}
@@ -291,6 +295,7 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
           <Button
             variant="outline"
             size="sm"
+            className="w-full"
             disabled={busy}
             onClick={() => setShowDisputeForm(true)}
           >
@@ -302,7 +307,20 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
   }
 
   if (req.status === "disputed") {
-    return <p className="text-xs font-medium text-destructive">Disputed — awaiting resolution.</p>;
+    return (
+      <div className="rounded-xl border border-destructive/25 bg-destructive-soft/70 p-3">
+        <p className="text-xs font-bold text-destructive">Disputed — under review</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+          An admin is reviewing the evidence from both sides. The escrow stays locked until a decision is made; the
+          outcome will appear here and in Messages.
+        </p>
+        {req.disputeReason && (
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            <span className="font-semibold text-foreground">Reason:</span> {req.disputeReason}
+          </p>
+        )}
+      </div>
+    );
   }
 
   return null;

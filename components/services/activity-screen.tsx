@@ -5,14 +5,16 @@ import { STATUS_META, formatPi, timeAgo, type HireRequest } from "@/lib/services
 import { backendApi } from "@/lib/backend-api";
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { useServices } from "@/contexts/services-context";
-import { Button, Card, EmptyState, Pill } from "./ui";
+import { Button, Card, cx, EmptyState, Pill, TextArea } from "./ui";
 import { EscrowActions } from "./escrow-actions";
+import { Overlay } from "./feedback";
+import { RequestTimeline } from "./request-timeline";
+import { IconStar } from "./icons";
 
 export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages, onViewDispute }: { onBrowse: () => void; initialOpenRequestId?: string | null; onOpenMessages?: (requestId: string) => void; onViewDispute?: (requestId: string) => void }) {
   const { outgoing, incoming, setRequestStatus, pushToast, requests } = useServices();
   const { accessToken } = usePiAuth();
   const [openRequest, setOpenRequest] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<string | null>(null);
   const [reviewPromptFor, setReviewPromptFor] = useState<null | HireRequest>(null);
 
   useEffect(() => {
@@ -86,14 +88,19 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
             <span className="text-xs text-muted-foreground">{timeAgo(req.createdAt)}</span>
           </div>
 
-          <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-foreground">
-            {req.message?.trim() ? req.message.trim().replace(/\s+/g, " ") : "No message provided."}
-          </p>
+          {!cardExpanded && (
+            <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-foreground">
+              {req.message?.trim() ? req.message.trim().replace(/\s+/g, " ") : "No message provided."}
+            </p>
+          )}
         </button>
 
         {cardExpanded && (
-          <div className="mt-3 rounded-xl bg-secondary/60 p-3 text-sm text-foreground">
-            <p className="whitespace-pre-wrap leading-relaxed text-foreground">{req.message?.trim() || "No message provided."}</p>
+          <div className="mt-3 space-y-2">
+            <RequestTimeline req={req} />
+            <div className="rounded-xl bg-secondary/60 p-3 text-sm text-foreground">
+              <p className="whitespace-pre-wrap leading-relaxed text-foreground">{req.message?.trim() || "No message provided."}</p>
+            </div>
           </div>
         )}
 
@@ -105,8 +112,11 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
               className="flex-1"
               onClick={() => {
                 void setRequestStatus(req.id, "accepted")
-                  .then(() => setFeedback("Request accepted successfully."))
-                  .catch((err) => console.error("[Activity] Accept failed:", err));
+                  .then(() => pushToast("Request accepted", "success"))
+                  .catch((err) => {
+                    console.error("[Activity] Accept failed:", err);
+                    pushToast("Could not accept this request. Please try again.", "danger");
+                  });
               }}
             >
               Accept
@@ -117,8 +127,11 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
               className="flex-1"
               onClick={() => {
                 void setRequestStatus(req.id, "declined")
-                  .then(() => setFeedback("Request declined."))
-                  .catch((err) => console.error("[Activity] Decline failed:", err));
+                  .then(() => pushToast("Request declined", "info"))
+                  .catch((err) => {
+                    console.error("[Activity] Decline failed:", err);
+                    pushToast("Could not decline this request. Please try again.", "danger");
+                  });
               }}
             >
               Decline
@@ -134,12 +147,15 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
               className="w-full"
               onClick={() => {
                 if (req.status !== "pending") {
-                  setFeedback("Only pending requests can be cancelled.");
+                  pushToast("Only pending requests can be cancelled.", "warning");
                   return;
                 }
                 void setRequestStatus(req.id, "declined")
-                  .then(() => setFeedback("Request cancelled successfully."))
-                  .catch((err) => console.error("[Activity] Cancel failed:", err));
+                  .then(() => pushToast("Request cancelled", "info"))
+                  .catch((err) => {
+                    console.error("[Activity] Cancel failed:", err);
+                    pushToast("Could not cancel this request. Please try again.", "danger");
+                  });
               }}
             >
               Cancel
@@ -216,8 +232,6 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
       </div>
 
       <div className="space-y-5 px-4 pt-4">
-        {feedback && <p role="status" className="rounded-xl bg-success-soft px-3 py-2 text-xs font-medium text-success">{feedback}</p>}
-
         {allRequests.length === 0 ? (
           <EmptyState
             title="No activity yet"
@@ -259,43 +273,89 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
   );
 }
 
-function ReviewModal({ hireRequest, onClose, onSubmit }: { hireRequest: HireRequest; onClose: () => void; onSubmit: (rating: number, text: string) => Promise<void> }) {
+function ReviewModal({
+  hireRequest,
+  onClose,
+  onSubmit,
+}: {
+  hireRequest: HireRequest;
+  onClose: () => void;
+  onSubmit: (rating: number, text: string) => Promise<void>;
+}) {
   const [rating, setRating] = useState<number>(5);
   const [text, setText] = useState<string>("");
   const [loading, setLoading] = useState(false);
 
+  const labels = ["", "Poor", "Fair", "Good", "Great", "Excellent"];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-lg bg-card p-4">
-        <h3 className="text-lg font-bold">Write a review for {hireRequest.providerName}</h3>
-        <p className="mt-2 text-xs text-muted-foreground">Share your experience and help other customers.</p>
-        <div className="mt-3 flex gap-2">
-          {[1, 2, 3, 4, 5].map((n) => (
-            <button
-              key={n}
-              type="button"
-              className={n <= rating ? "ps-press rounded-md bg-primary px-3 py-1 text-white" : "ps-press rounded-md bg-secondary px-3 py-1 text-muted-foreground"}
-              onClick={() => setRating(n)}
-            >
-              {n}★
-            </button>
-          ))}
+    <Overlay
+      open
+      onClose={() => (loading ? undefined : onClose())}
+      title="Leave a review"
+    >
+      <div className="mx-auto max-w-md space-y-5 p-4 pb-28">
+        <div>
+          <p className="ps-eyebrow">Completed request</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            How was working with <span className="font-semibold text-foreground">{hireRequest.providerName}</span>?
+          </p>
         </div>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} className="mt-3 w-full rounded-md border p-2 text-sm" rows={4} />
-        <div className="mt-3 flex justify-end gap-2">
-          <button type="button" className="ps-press rounded-md px-3 py-1" onClick={onClose} disabled={loading}>
-            Skip
-          </button>
-          <button
-            type="button"
-            className="ps-press rounded-md bg-primary px-3 py-1 text-white"
+
+        <div className="rounded-2xl border border-border bg-card p-4">
+          <div className="flex items-center justify-center gap-1.5" role="radiogroup" aria-label="Rating">
+            {[1, 2, 3, 4, 5].map((n) => (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={rating === n}
+                aria-label={`${n} star${n === 1 ? "" : "s"}`}
+                onClick={() => setRating(n)}
+                className="ps-press rounded-lg p-1.5"
+              >
+                <IconStar
+                  size={30}
+                  filled={n <= rating}
+                  className={cx(n <= rating ? "text-accent-foreground" : "text-border")}
+                />
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-center text-xs font-semibold text-muted-foreground">{labels[rating]}</p>
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="review-text" className="text-sm font-semibold text-foreground">
+            What should other buyers know?
+          </label>
+          <TextArea
+            id="review-text"
+            rows={4}
+            maxLength={600}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Was the work delivered as agreed? Anything worth mentioning?"
+          />
+          <p className="text-right text-xs text-muted-foreground ps-nums">{text.length}/600</p>
+        </div>
+
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          Reviews are public and can only be left once for a completed request.
+        </p>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-card/95 px-4 py-3 ps-safe-bottom backdrop-blur">
+        <div className="mx-auto flex max-w-md gap-2">
+          <Button variant="outline" className="flex-1" onClick={onClose} disabled={loading}>
+            Not now
+          </Button>
+          <Button
+            className="flex-1"
             onClick={async () => {
               setLoading(true);
               try {
                 await onSubmit(rating, text);
-                onClose();
-              } catch (e) {
-                console.error(e);
               } finally {
                 setLoading(false);
               }
@@ -303,10 +363,10 @@ function ReviewModal({ hireRequest, onClose, onSubmit }: { hireRequest: HireRequ
             disabled={loading}
           >
             {loading ? "Submitting…" : "Submit review"}
-          </button>
+          </Button>
         </div>
       </div>
-    </div>
+    </Overlay>
   );
 }
 

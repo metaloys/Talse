@@ -38,6 +38,22 @@ export function IconGrid(p: IconProps) {
   );
 }
 
+export function IconStar({ filled = false, ...p }: IconProps & { filled?: boolean }) {
+  return (
+    <svg {...base(p)} fill={filled ? "currentColor" : "none"}>
+      <path d="M12 3.6l2.6 5.27 5.82.85-4.21 4.1.99 5.79L12 16.88l-5.2 2.73.99-5.79-4.21-4.1 5.82-.85z" />
+    </svg>
+  );
+}
+
+export function IconBolt(p: IconProps) {
+  return (
+    <svg {...base(p)}>
+      <path d="M13 2.5 4.5 13.5H11l-1 8 8.5-11H12z" />
+    </svg>
+  );
+}
+
 export function IconSearch(p: IconProps) {
   return (
     <svg {...base(p)}>
