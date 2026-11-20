@@ -49,7 +49,9 @@ export function RequestTimeline({ req }: { req: HireRequest }) {
     <div className="rounded-xl border border-border bg-secondary/40 p-3">
       <div className="mb-2 flex items-center justify-between gap-2">
         <p className="text-xs font-bold text-foreground">Where this stands</p>
-        <span className="text-[11px] text-muted-foreground">Started {formatDate(new Date(req.createdAt).toISOString())}</span>
+        <span className="text-[11px] text-muted-foreground">
+          Started {formatDate(new Date(req.createdAt).toISOString().slice(0, 10))}
+        </span>
       </div>
 
       <ol className="space-y-2">
