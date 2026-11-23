@@ -12,6 +12,7 @@ import React, {
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { useRealtimeClient } from "@/contexts/realtime-client-context";
 import { backendApi } from "@/lib/backend-api";
+import { track } from "@/lib/analytics";
 import {
   APP_NAME,
   CATEGORIES,
@@ -145,6 +146,8 @@ function compareServices(a: Service, b: Service) {
 function mapBackendRequest(row: any, currentUid: string | null): HireRequest {
   const direction = row.buyer_uid === currentUid ? "outgoing" : "incoming";
   const status: RequestStatus = row.status;
+  const offers = Array.isArray(row.offers) ? row.offers : [];
+  const liveOffer = offers.find((o: any) => o && o.status === "pending") ?? null;
   return {
     id: row.id,
     requesterPiId: row.buyer_uid,
@@ -162,6 +165,16 @@ function mapBackendRequest(row: any, currentUid: string | null): HireRequest {
     status,
     direction,
     createdAt: new Date(row.created_at).getTime(),
+    pendingOffer: liveOffer
+      ? {
+          id: liveOffer.id,
+          proposerUid: liveOffer.proposer_uid,
+          amount: Number(liveOffer.amount),
+          message: liveOffer.message ?? null,
+          createdAt: new Date(liveOffer.created_at).getTime(),
+          byMe: liveOffer.proposer_uid === currentUid,
+        }
+      : null,
     disputeReason: row.dispute_reason ?? null,
     disputeDetails: row.dispute_details ?? null,
     disputeEvidence: row.dispute_evidence ?? [],
@@ -235,6 +248,8 @@ interface ServicesContextType {
   incoming: HireRequest[];
   hire: (input: HireInput) => Promise<void>;
   setRequestStatus: (id: string, status: RequestStatus) => Promise<void>;
+  makeOffer: (id: string, amount: number, message?: string) => Promise<void>;
+  respondToOffer: (id: string, offerId: string, accept: boolean) => Promise<void>;
   fileDispute: (id: string, input: { reason: string; details?: string; evidence?: string[] }) => Promise<void>;
   refreshRequests: () => Promise<void>;
 
@@ -794,6 +809,14 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
       token
     );
     setRequests((prev) => [mapBackendRequest(request, piUser?.uid ?? null), ...prev]);
+    track("request_sent", {
+      request_id: request?.id,
+      service_id: input.service.id,
+      category: input.service.category,
+      price: input.service.price,
+      has_attachments: (input.attachments?.length ?? 0) > 0,
+      has_deadline: Boolean(input.deadline),
+    });
     pushToast("Hire request sent", "success");
   };
 
@@ -802,8 +825,42 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
     const backendStatus = status === "declined" ? "cancelled" : status;
     const { request } = await backendApi.hireRequests.setStatus(id, backendStatus, token);
     setRequests((prev) => prev.map((r) => (r.id === id ? mapBackendRequest(request, piUser?.uid ?? null) : r)));
-    if (status === "accepted") pushToast("Request accepted", "success");
-    else if (status === "declined") pushToast("Request declined", "warning");
+    if (status === "accepted") {
+      track("request_accepted", {
+        request_id: id,
+        service_id: request?.service_id ?? request?.serviceId,
+        price: request?.price ?? request?.service_price,
+      });
+      pushToast("Request accepted", "success");
+    } else if (status === "declined") {
+      track("request_declined", { request_id: id });
+      pushToast("Request declined", "warning");
+    }
+  };
+
+  const makeOffer = async (id: string, amount: number, message?: string): Promise<void> => {
+    const token = requireAuth();
+    const { offer } = await backendApi.hireRequests.makeOffer(id, { amount, message }, token);
+    const liveOffer = {
+      id: offer.id,
+      proposerUid: offer.proposer_uid,
+      amount: Number(offer.amount),
+      message: offer.message ?? null,
+      createdAt: new Date(offer.created_at).getTime(),
+      byMe: true,
+    };
+    setRequests((prev) => prev.map((r) => (r.id === id ? { ...r, pendingOffer: liveOffer } : r)));
+    track("offer_sent", { request_id: id, amount });
+    pushToast("Offer sent", "success");
+  };
+
+  const respondToOffer = async (id: string, offerId: string, accept: boolean): Promise<void> => {
+    const token = requireAuth();
+    const { request } = await backendApi.hireRequests.respondToOffer(id, { offerId, accept }, token);
+    setRequests((prev) => prev.map((r) => (r.id === id ? mapBackendRequest(request, piUser?.uid ?? null) : r)));
+    track(accept ? "offer_accepted" : "offer_declined", { request_id: id, amount: Number(request?.amount) });
+    if (accept) pushToast("Offer accepted — fund the escrow to start", "success");
+    else pushToast("Offer declined", "info");
   };
 
   const fileDispute = async (
@@ -911,6 +968,8 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
     incoming,
     hire,
     setRequestStatus,
+    makeOffer,
+    respondToOffer,
     fileDispute,
     refreshRequests,
     messages,

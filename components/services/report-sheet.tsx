@@ -5,6 +5,7 @@ import { usePiAuth } from "@/contexts/pi-auth-context";
 import { useServices } from "@/contexts/services-context";
 import { Button, cx, Field, TextArea } from "./ui";
 import { IconFlag } from "./icons";
+import { track } from "@/lib/analytics";
 
 type ReportTarget = "service" | "user" | "review";
 
@@ -97,6 +98,7 @@ export function ReportSheet({
         throw new Error(typeof data?.error === "string" ? data.error : "Could not send the report.");
       }
       pushToast("Report sent. Our team will review it.", "success");
+      track("report_submitted", { target_type: targetType, target_id: targetId, reason });
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not send the report.");

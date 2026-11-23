@@ -12,10 +12,13 @@ import { RequestTimeline } from "./request-timeline";
 import { IconStar } from "./icons";
 
 export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages, onViewDispute }: { onBrowse: () => void; initialOpenRequestId?: string | null; onOpenMessages?: (requestId: string) => void; onViewDispute?: (requestId: string) => void }) {
-  const { outgoing, incoming, setRequestStatus, pushToast, requests } = useServices();
+  const { outgoing, incoming, setRequestStatus, makeOffer, respondToOffer, pushToast, requests } = useServices();
   const { accessToken } = usePiAuth();
   const [openRequest, setOpenRequest] = useState<string | null>(null);
   const [reviewPromptFor, setReviewPromptFor] = useState<null | HireRequest>(null);
+  const [offerFor, setOfferFor] = useState<string | null>(null);
+  const [offerAmount, setOfferAmount] = useState("");
+  const [offerBusy, setOfferBusy] = useState(false);
 
   useEffect(() => {
     if (!initialOpenRequestId) return;
@@ -104,7 +107,71 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
           </div>
         )}
 
-        {status === "pending" && req.direction === "incoming" && (
+        {status === "pending" && req.pendingOffer && !req.pendingOffer.byMe && (
+          <div className="mt-3 rounded-xl border border-primary/30 bg-primary/5 p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
+              {req.direction === "incoming" ? "Buyer proposed a new price" : "Provider proposed a new price"}
+            </p>
+            <p className="mt-1 text-lg font-bold text-foreground ps-nums">
+              {formatPi(req.pendingOffer.amount)}
+              <span className="ml-2 text-xs font-normal text-muted-foreground line-through">{formatPi(req.servicePrice)}</span>
+            </p>
+            {req.pendingOffer.message && (
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{req.pendingOffer.message}</p>
+            )}
+            <div className="mt-2 flex gap-2">
+              <Button
+                variant="success"
+                size="sm"
+                className="flex-1"
+                disabled={offerBusy}
+                onClick={() => {
+                  const offer = req.pendingOffer;
+                  if (!offer) return;
+                  setOfferBusy(true);
+                  void respondToOffer(req.id, offer.id, true)
+                    .catch((err) => {
+                      console.error("[Activity] Accept offer failed:", err);
+                      pushToast(err instanceof Error ? err.message : "Could not accept the offer.", "danger");
+                    })
+                    .finally(() => setOfferBusy(false));
+                }}
+              >
+                Accept {formatPi(req.pendingOffer.amount)}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                disabled={offerBusy}
+                onClick={() => {
+                  const offer = req.pendingOffer;
+                  if (!offer) return;
+                  setOfferBusy(true);
+                  void respondToOffer(req.id, offer.id, false)
+                    .catch((err) => {
+                      console.error("[Activity] Decline offer failed:", err);
+                      pushToast(err instanceof Error ? err.message : "Could not decline the offer.", "danger");
+                    })
+                    .finally(() => setOfferBusy(false));
+                }}
+              >
+                Decline
+              </Button>
+            </div>
+            <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
+              Accepting agrees the price and accepts the work. The buyer then funds the escrow.
+            </p>
+          </div>
+        )}
+
+        {status === "pending" && req.pendingOffer?.byMe && (
+          <p className="mt-3 rounded-lg bg-secondary/60 px-3 py-2 text-xs text-muted-foreground">
+            You offered {formatPi(req.pendingOffer.amount)}. Waiting for their response.
+          </p>
+        )}
+
+        {status === "pending" && !req.pendingOffer && req.direction === "incoming" && (
           <div className="mt-3 flex gap-2">
             <Button
               variant="success"
@@ -139,7 +206,7 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
           </div>
         )}
 
-        {status === "pending" && req.direction === "outgoing" && (
+        {status === "pending" && !req.pendingOffer && req.direction === "outgoing" && (
           <div className="mt-3">
             <Button
               variant="outline"
@@ -160,6 +227,72 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
             >
               Cancel
             </Button>
+          </div>
+        )}
+
+        {status === "pending" && !req.pendingOffer && (
+          <div className="mt-2">
+            {offerFor === req.id ? (
+              <div className="flex items-end gap-2">
+                <label className="flex-1">
+                  <span className="text-[11px] text-muted-foreground">Your price (π)</span>
+                  <input
+                    value={offerAmount}
+                    onChange={(e) => setOfferAmount(e.target.value)}
+                    inputMode="decimal"
+                    placeholder={String(req.servicePrice)}
+                    className="mt-1 w-full rounded-lg border border-border bg-background px-2.5 py-2 text-sm text-foreground placeholder:text-muted-foreground"
+                  />
+                </label>
+                <Button
+                  size="sm"
+                  disabled={
+                    offerBusy ||
+                    !Number.isFinite(Number(offerAmount)) ||
+                    Number(offerAmount) <= 0 ||
+                    Number(offerAmount) === req.servicePrice
+                  }
+                  onClick={() => {
+                    const amount = Math.round(Number(offerAmount) * 100) / 100;
+                    if (!Number.isFinite(amount) || amount <= 0) return;
+                    setOfferBusy(true);
+                    void makeOffer(req.id, amount, undefined)
+                      .then(() => {
+                        setOfferFor(null);
+                        setOfferAmount("");
+                      })
+                      .catch((err) => {
+                        console.error("[Activity] Offer failed:", err);
+                        pushToast(err instanceof Error ? err.message : "Could not send the offer.", "danger");
+                      })
+                      .finally(() => setOfferBusy(false));
+                  }}
+                >
+                  Send
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setOfferFor(null);
+                    setOfferAmount("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline"
+                onClick={() => {
+                  setOfferFor(req.id);
+                  setOfferAmount(String(req.servicePrice));
+                }}
+              >
+                Propose a different price
+              </button>
+            )}
           </div>
         )}
 

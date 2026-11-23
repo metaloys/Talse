@@ -13,6 +13,7 @@ const DATA_CATEGORIES = [
   "reviews",
   "dispute evidence",
   "payment and escrow state",
+  "product usage events",
 ] as const;
 
 export default function PrivacyPage() {
@@ -52,6 +53,11 @@ export default function PrivacyPage() {
             In practical terms, that includes the Pi UID that identifies a user, the username presented in the app, profile
             information, public service listings, hire-request records, conversation messages, uploaded attachments, reviews,
             dispute evidence, and the payment/escrow state required to complete hire transactions safely.
+          </p>
+          <p className="leading-7 text-muted-foreground">
+            We also record limited product usage events (for example: app opened, a listing was viewed, a request was sent,
+            escrow was funded, a payment was released, a review was posted). These events are tied to your Pi UID, are used
+            only in aggregate to understand which parts of the marketplace work, and are never sold or used for advertising.
           </p>
         </section>
 

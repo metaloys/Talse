@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { completePayment, getPayment } from "@/lib/pi-platform";
+import { completePayment, getPayment, sendInAppNotifications } from "@/lib/pi-platform";
 import { finalizePaymentLock } from "@/lib/dispute-resolution";
 
 /**
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
     const { data: hr, error: fetchErr } = await supabaseAdmin
       .from("hire_requests")
-      .select("id, buyer_uid, escrow_request_id, status")
+      .select("id, buyer_uid, provider_uid, escrow_request_id, status")
       .eq("id", hireRequestId)
       .single();
     if (fetchErr || !hr) return NextResponse.json({ error: "Hire request not found" }, { status: 404 });
@@ -54,6 +54,21 @@ export async function POST(req: NextRequest) {
     const verifiedTxid = payment?.transaction?.txid ?? txid;
 
     const request = await finalizePaymentLock(hireRequestId, paymentId, verifiedTxid);
+
+    // Tell the provider the money is safely held and work can start.
+    try {
+      await sendInAppNotifications([
+        {
+          title: "Payment secured",
+          body: `${me.username} funded the escrow. You can start the work.`,
+          user_uid: hr.provider_uid,
+          subroute: `/hire-requests/${hireRequestId}`,
+        },
+      ]);
+    } catch (notifyErr) {
+      console.error("[Notifications] escrow-funding notify failed:", notifyErr instanceof Error ? notifyErr.message : notifyErr);
+    }
+
     return NextResponse.json({ request });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });

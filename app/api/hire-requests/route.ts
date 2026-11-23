@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { assertNotSuspended, SuspendedError } from "@/lib/suspension";
+import { sendInAppNotifications } from "@/lib/pi-platform";
 
 // GET /api/hire-requests?role=incoming|outgoing — scoped to the caller.
 export async function GET(req: NextRequest) {
@@ -31,7 +32,7 @@ export async function GET(req: NextRequest) {
     let query = supabaseAdmin
       .from("hire_requests")
       .select(
-        "*, services(title, images, price), buyer:profiles!hire_requests_buyer_uid_fkey(username, display_name), provider:profiles!hire_requests_provider_uid_fkey(username, display_name)",
+        "*, services(title, images, price), buyer:profiles!hire_requests_buyer_uid_fkey(username, display_name), provider:profiles!hire_requests_provider_uid_fkey(username, display_name), offers:hire_offers(id, proposer_uid, amount, message, status, created_at)",
         { count: "exact" }
       )
       .eq(column, me.uid)
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     const { data: service, error: svcErr } = await supabaseAdmin
       .from("services")
-      .select("id, owner_uid, price, active")
+      .select("id, owner_uid, price, active, title")
       .eq("id", serviceId)
       .single();
     if (svcErr || !service) return NextResponse.json({ error: "Service not found" }, { status: 404 });
@@ -141,6 +142,22 @@ export async function POST(req: NextRequest) {
       console.error("[hire-requests] create failed:", error.message);
       return NextResponse.json({ error: "Internal error" }, { status: 500 });
     }
+
+    // Notify the provider that a new request is waiting. Non-blocking: a
+    // notification failure must never fail the hire request itself.
+    try {
+      await sendInAppNotifications([
+        {
+          title: "New hire request",
+          body: `${me.username} wants to hire you for "${String(service.title).slice(0, 60)}" (${service.price} π).`,
+          user_uid: service.owner_uid,
+          subroute: `/hire-requests/${data.id}`,
+        },
+      ]);
+    } catch (notifyErr) {
+      console.error("[Notifications] new-request notify failed:", notifyErr instanceof Error ? notifyErr.message : notifyErr);
+    }
+
     return NextResponse.json({ request: data }, { status: 201 });
   } catch (err) {
     if (err instanceof SuspendedError) return NextResponse.json({ error: err.message }, { status: err.status });

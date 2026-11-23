@@ -94,6 +94,10 @@ export const backendApi = {
       request<{ request: any }>(`/api/hire-requests/${id}/release`, { method: "POST", accessToken }),
     refund: (id: string, accessToken: string) =>
       request<{ request: any }>(`/api/hire-requests/${id}/refund`, { method: "POST", accessToken }),
+    makeOffer: (id: string, body: { amount: number; message?: string }, accessToken: string) =>
+      request<{ offer: any }>(`/api/hire-requests/${id}/offers`, { method: "POST", body, accessToken }),
+    respondToOffer: (id: string, body: { offerId: string; accept: boolean }, accessToken: string) =>
+      request<{ offer: any; request: any }>(`/api/hire-requests/${id}/offers/respond`, { method: "POST", body, accessToken }),
   },
 
   payments: {

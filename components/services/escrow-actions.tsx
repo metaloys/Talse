@@ -7,6 +7,7 @@ import { backendApi } from "@/lib/backend-api";
 import { getOrCreateRecovery, waitForAllRecoveries } from "@/lib/recovery-guard";
 import { getFrontendPlatformFeePercent, calcPlatformFee, BLOCKCHAIN_GAS_LABEL } from "@/lib/frontend-fee-config";
 import { formatPi, type HireRequest } from "@/lib/services/data";
+import { track } from "@/lib/analytics";
 import { Button } from "./ui";
 
 const STUCK_PAYMENT_AGE_MS = 60_000;
@@ -170,6 +171,11 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
                 return;
               }
               await payIntoEscrow(req, accessToken);
+              track("payment_escrowed", {
+                request_id: req.id,
+                amount: req.servicePrice,
+                service_id: req.serviceId,
+              });
               await refreshRequests();
               pushToast("Payment locked in escrow", "success");
             })
@@ -198,7 +204,10 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
         size="sm"
         className="w-full"
         disabled={busy}
-        onClick={() => withBusy(async () => setRequestStatus(req.id, "delivered"))}
+        onClick={() => withBusy(async () => {
+          await setRequestStatus(req.id, "delivered");
+          track("request_delivered", { request_id: req.id, service_id: req.serviceId });
+        })}
       >
         {busy ? "Updating…" : "Mark as delivered"}
       </Button>
@@ -216,6 +225,11 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
           onClick={() =>
             withBusy(async () => {
               await backendApi.hireRequests.release(req.id, accessToken);
+              track("payment_released", {
+                request_id: req.id,
+                amount: req.servicePrice,
+                service_id: req.serviceId,
+              });
               await refreshRequests();
               pushToast("Funds released to provider", "success");
               if (onReleased) onReleased(req);

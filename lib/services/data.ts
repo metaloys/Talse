@@ -101,7 +101,16 @@ export interface HireRequest {
   status: RequestStatus;
   direction: RequestDirection;
   createdAt: number;
-  // Dispute detail — present once status has ever been 'disputed'.
+  // Live counter-offer from the other party, if any.
+  pendingOffer?: {
+    id: string;
+    proposerUid: string;
+    amount: number;
+    message: string | null;
+    createdAt: number;
+    byMe: boolean;
+  } | null;
+  // Dispute detail - present once status has ever been 'disputed'.
   disputeReason?: string | null;
   disputeDetails?: string | null;
   disputeEvidence?: string[];

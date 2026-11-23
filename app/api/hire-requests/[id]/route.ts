@@ -11,7 +11,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const me = await verifyPiToken(req.headers.get("authorization"));
         const { data, error } = await supabaseAdmin
           .from("hire_requests")
-          .select("id, service_id, buyer_uid, provider_uid, message, deadline, attachments, status, amount, created_at")
+          .select("id, service_id, buyer_uid, provider_uid, message, deadline, attachments, status, amount, created_at, offers:hire_offers(id, proposer_uid, amount, message, status, created_at)")
           .eq("id", id)
           .single();
     if (error || !data) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -144,9 +144,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         disputed: "Dispute filed",
       };
       const bodyMap: Record<string, string> = {
-        accepted: "Your hire request was accepted.",
+        accepted: "Your request was accepted. Fund the escrow to start the work.",
         cancelled: "A hire request was cancelled.",
-        delivered: "Work has been marked delivered.",
+        delivered: "Work was marked delivered. Review it and release the payment.",
         disputed: "A dispute was filed for your request.",
       };
       const title = titleMap[nextStatus] ?? "Request updated";

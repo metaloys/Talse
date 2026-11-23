@@ -6,6 +6,7 @@ import { useServices } from "@/contexts/services-context";
 import { backendApi } from "@/lib/backend-api";
 import { timeAgo } from "@/lib/services/data";
 import { Button, Card, EmptyState, Field, Pill, TextArea } from "./ui";
+import { track } from "@/lib/analytics";
 
 type ReviewRow = {
   id: string;
@@ -101,6 +102,7 @@ export function ReviewsScreen({ providerUid: explicitProviderUid }: { providerUi
     setState("loading");
     try {
       await backendApi.reviews.create({ hireRequestId: reviewableHireRequest.id, rating, text: comment.trim() }, accessToken);
+      track("review_submitted", { hire_request_id: reviewableHireRequest.id, rating });
       setComment("");
       setRating(0);
       setView("list");

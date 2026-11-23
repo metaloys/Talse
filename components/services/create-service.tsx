@@ -16,6 +16,7 @@ import {
 } from "@/lib/services/data";
 import { useServices } from "@/contexts/services-context";
 import { compressImageFile, ACCEPTED_IMAGE_TYPES } from "@/lib/image-compress";
+import { track } from "@/lib/analytics";
 import { Overlay } from "./feedback";
 import { Button, Card, cx, Field, IconButton, Select, TextArea, TextInput } from "./ui";
 import { CategoryIcon, IconImage, IconPlus, IconTrash } from "./icons";
@@ -125,9 +126,11 @@ export function CreateService({
     try {
       if (editing) {
         await updateService(editing.id, input);
+        track("service_updated", { service_id: editing.id, category });
         onSaved(null);
       } else {
         const svc = await addService(input);
+        track("service_created", { service_id: svc?.id, category, price: priceValue, image_count: images.length });
         onSaved(svc);
       }
     } catch (err) {

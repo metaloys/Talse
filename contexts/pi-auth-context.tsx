@@ -11,6 +11,7 @@ import { PI_NETWORK_CONFIG } from "@/lib/system-config";
 import { buildPiSdk, createSdk } from "@/lib/pi";
 import { backendApi } from "@/lib/backend-api";
 import { getOrCreateRecovery, waitForAllRecoveries } from "@/lib/recovery-guard";
+import { setAnalyticsToken } from "@/lib/analytics";
 import type {
   Product,
   SDKLiteInstance,
@@ -221,6 +222,11 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   const [realtimeToken, setRealtimeToken] = useState<string | null>(null);
   const [piUser, setPiUser] = useState<{ uid: string; username: string } | null>(null);
   const [recoveryInProgress, setRecoveryInProgress] = useState<boolean>(false);
+
+  // Analytics is authenticated; keep the tracking client in sync with the token.
+  useEffect(() => {
+    setAnalyticsToken(accessToken);
+  }, [accessToken]);
 
   const recoverIncompletePaymentsAfterLogin = async (accessToken: string): Promise<void> => {
     try {

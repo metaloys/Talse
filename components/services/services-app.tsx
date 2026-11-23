@@ -18,6 +18,7 @@ import { ProviderProfile } from "./provider-profile";
 import { AdminPanel } from "./admin-panel";
 import { DisputeResolution } from "./dispute-resolution";
 import { Overlay } from "./feedback";
+import { track, trackAppOpen } from "@/lib/analytics";
 
 function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request"; id: string } | null }) {
   const { ready, storageTrouble, toasts, dismissToast, incoming, getService } = useServices();
@@ -57,11 +58,23 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
     }
   }, [initialDeepLink]);
 
+  // One app_open per session, fired only once the app is actually usable.
+  useEffect(() => {
+    if (ready) trackAppOpen();
+  }, [ready]);
+
   if (!ready) return <LoadingScreen />;
   if (adminOpen) return <AdminPanel onExit={() => setAdminOpen(false)} />;
   if (disputesOpen) return <DisputeResolution onClose={() => { setDisputesOpen(false); setDisputeRequestId(null); }} requestId={disputeRequestId ?? undefined} />;
 
   const openService = (s: Service) => {
+    track("service_view", {
+      service_id: s.id,
+      category: s.category,
+      price: s.price,
+      owner_id: s.ownerId,
+      is_owner: s.ownerId === "me",
+    });
     setDetailService(s);
     setDetailOpen(true);
   };
