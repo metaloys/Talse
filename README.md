@@ -208,6 +208,18 @@ Important nuance:
 
 The payout logic intentionally acquires a payout lock before a release or refund operation. This is a defensive concurrency measure to reduce duplicate payout execution. The code comments and exception classes explicitly surface the operational intent: avoid duplicate payouts, block stale or unreconciled operations, and preserve data integrity when a wallet lease or payment state becomes inconsistent.
 
+## Platform economics and reporting
+
+The platform's books are derived views, not a separate accounting table, so the ledger can never drift from the rows the marketplace already writes.
+
+- `hire_requests.platform_fee` is the 10% transaction fee taken at release.
+- `boost_purchases.amount` is featured-listing revenue; boosts are paid with native `Pi.createPayment` (`lib/boost-config.ts`, `app/api/payments/boost/{approve,complete}`).
+- `hire_requests.blockchain_fee` and `boost_purchases.blockchain_fee` are the network costs the platform absorbs on payouts and purchases.
+- `supabase/migrations/009_platform_earnings.sql` defines `v_platform_earnings` (lifetime, per source) and `v_platform_earnings_daily` (daily series for last-30-day reporting). Both are service-role only.
+- `GET /api/admin/dashboard` returns `earnings` (`transactionFees`, `boostRevenue`, `networkCosts`, `netEarnings`, `grossVolume`, `providerPayouts`, `last30`) and `escrow` (`inFlight`, `openJobs`). Escrow balances are reported separately because money held for unfinished jobs is a liability, not revenue.
+
+The admin dashboard renders this as a single earnings card: money in by source, network fees paid, the net bottom line, and the last-30-day trend.
+
 ## Payment safety and recovery mechanisms
 
 The repository includes a real recovery-oriented safety layer for incomplete or stuck payments.

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { createA2UPayment, completePayment, getIncompleteServerPayments, cancelPayment, getPayment, sendInAppNotifications } from "@/lib/pi-platform";
 import { submitA2UPayment } from "@/lib/pi-a2u";
-import { getPlatformFeePercent, formatPi } from "@/lib/fee-config";
+import { getPlatformFeePercent, formatPi, PLATFORM_NETWORK_FEE_PI } from "@/lib/fee-config";
 
 export class PayoutNotConfiguredError extends Error {
   status = 503;
@@ -281,9 +281,15 @@ export async function reconcileStalePayoutLock(hireRequestId: string, favor: "pr
           throw new Error("Found verified payout payment without txid");
         }
         await completePayment(paymentId, txid);
+        // The platform wallet pays the network fee on the outgoing payout, so
+        // record it here — this is the "money out" side of the earnings ledger.
+        // Prefer the fee Pi reports for this transaction; fall back to the
+        // published 0.01 π the UI already promises to cover.
+        const reportedFee = Number(match?.transaction?.fee ?? match?.fee ?? 0);
+        const networkFee = Number.isFinite(reportedFee) && reportedFee > 0 ? reportedFee : PLATFORM_NETWORK_FEE_PI;
         const update = favor === "provider"
-          ? { status: "released", release_txid: txid, payout_status: "confirmed" }
-          : { status: "refunded", refund_txid: txid, payout_status: "confirmed" };
+          ? { status: "released", release_txid: txid, payout_status: "confirmed", blockchain_fee: networkFee }
+          : { status: "refunded", refund_txid: txid, payout_status: "confirmed", blockchain_fee: networkFee };
         const { data, error } = await supabaseAdmin
           .from("hire_requests")
           .update(update)

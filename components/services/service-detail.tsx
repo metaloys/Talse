@@ -202,7 +202,7 @@ export function ServiceDetail({
       {isMine && (
         <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-card/95 px-4 py-3 ps-safe-bottom backdrop-blur">
           <div className="mx-auto max-w-md">
-            <BoostListing listingId={service.id} />
+            <BoostListing listingId={service.id} boostedUntil={service.boostedUntil} />
           </div>
         </div>
       )}

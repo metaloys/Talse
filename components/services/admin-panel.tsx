@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { backendApi } from "@/lib/backend-api";
 import { usePiAuth } from "@/contexts/pi-auth-context";
-import { APP_NAME, timeAgo } from "@/lib/services/data";
+import { APP_NAME, formatPi, timeAgo } from "@/lib/services/data";
 import { Button, Card, EmptyState, Pill, Select, TextArea, TextInput } from "./ui";
 import { IconChevronRight } from "./icons";
 
@@ -82,6 +82,8 @@ export function AdminPanel({ onExit }: { onExit: () => void }) {
   const [rows, setRows] = useState<Array<any>>([]);
   const [auditFilter, setAuditFilter] = useState<"All" | "user" | "service" | "review">("All");
   const [counts, setCounts] = useState<any>(null);
+  const [earnings, setEarnings] = useState<any>(null);
+  const [escrow, setEscrow] = useState<any>(null);
   const [fees, setFees] = useState<number | null>(null);
   const [settings, setSettings] = useState<string[] | null>(null);
   const [incompletePayments, setIncompletePayments] = useState<any[]>([]);
@@ -108,6 +110,8 @@ export function AdminPanel({ onExit }: { onExit: () => void }) {
           backendApi.payments.listIncomplete(token),
         ]);
         setCounts(dashboardRes.counts);
+        setEarnings(dashboardRes.earnings ?? null);
+        setEscrow(dashboardRes.escrow ?? null);
         setDashboardDisputes(disputesRes.disputes ?? []);
         setDashboardReports(reportsRes.reports ?? []);
         setIncompletePayments(incompleteRes.incomplete ?? []);
@@ -233,7 +237,7 @@ export function AdminPanel({ onExit }: { onExit: () => void }) {
               </div>
               {error && <p role="alert" className="mt-3 rounded-xl bg-destructive-soft px-3 py-2 text-xs text-destructive">{error}</p>}
               {tab === "dashboard" ? (
-                <Dashboard counts={counts} disputes={dashboardDisputes} reports={dashboardReports} incompleteRows={incompletePayments} />
+                <Dashboard counts={counts} earnings={earnings} escrow={escrow} disputes={dashboardDisputes} reports={dashboardReports} incompleteRows={incompletePayments} />
               ) : tab === "settings" ? (
                 <Settings saved={saved} onSave={() => setSaved(true)} adminUids={settings} />
               ) : tab === "reports" ? (
@@ -621,7 +625,7 @@ function Info({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Dashboard({ counts, disputes, reports, incompleteRows }: { counts: any; disputes: any[]; reports: any[]; incompleteRows: any[] }) {
+function Dashboard({ counts, earnings, escrow, disputes, reports, incompleteRows }: { counts: any; earnings: any; escrow: any; disputes: any[]; reports: any[]; incompleteRows: any[] }) {
   if (!counts) return <Card className="mt-4 p-4">Loading metrics…</Card>;
 
   const openDisputes = disputes.filter((row) => deriveStatus(row) === "Open" || deriveStatus(row) === "Pending" || deriveStatus(row) === "Escalated").length;
@@ -657,12 +661,54 @@ function Dashboard({ counts, disputes, reports, incompleteRows }: { counts: any;
         <Card className="p-4"><p className="text-xs text-muted-foreground">Open requests</p><p className="mt-1 text-2xl font-bold text-foreground">{counts.openRequests}</p></Card>
         <Card className="p-4"><p className="text-xs text-muted-foreground">Completed jobs</p><p className="mt-1 text-2xl font-bold text-foreground">{counts.completedJobs}</p></Card>
       </div>
-      <Card className="p-4"><p className="text-xs text-muted-foreground">Revenue</p><p className="mt-1 text-2xl font-bold text-foreground">{counts.platformFeesCollected}</p></Card>
-      <div className="grid grid-cols-3 gap-3">
-        <Card className="p-4"><p className="text-xs text-muted-foreground">Network costs</p><p className="mt-1 text-2xl font-bold text-foreground">{counts.totalBlockchainFees}</p></Card>
-        <Card className="p-4"><p className="text-xs text-muted-foreground">Revenue after network fees</p><p className="mt-1 text-2xl font-bold text-foreground">{counts.totalPlatformNet}</p></Card>
-        <Card className="p-4"><p className="text-xs text-muted-foreground">Boost revenue</p><p className="mt-1 text-2xl font-bold text-foreground">{counts.boostRevenue}</p><p className="mt-1 text-xs text-muted-foreground">{counts.boostPurchaseCount} purchases</p></Card>
-      </div>
+      <Card className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-muted-foreground">Earnings</p>
+          <Pill tone={earnings && earnings.netEarnings > 0 ? "success" : "neutral"}>
+            {earnings ? `${earnings.releasedJobs} jobs · ${earnings.boostsSold} boosts` : "no data"}
+          </Pill>
+        </div>
+        <p className="mt-2 text-3xl font-bold text-foreground ps-nums">
+          {earnings ? formatPi(earnings.netEarnings) : "—"}
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">Net after network fees, all time</p>
+
+        <div className="mt-4 space-y-1.5 border-t border-border pt-3 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Transaction fees</span>
+            <span className="font-semibold text-foreground ps-nums">+{earnings ? formatPi(earnings.transactionFees) : "—"}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Boost sales</span>
+            <span className="font-semibold text-foreground ps-nums">+{earnings ? formatPi(earnings.boostRevenue) : "—"}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-muted-foreground">Network fees paid</span>
+            <span className="font-semibold text-destructive ps-nums">−{earnings ? formatPi(earnings.networkCosts) : "—"}</span>
+          </div>
+        </div>
+
+        <div className="mt-3 space-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between gap-3">
+            <span>Last 30 days, net</span>
+            <span className="font-semibold text-foreground ps-nums">{earnings ? formatPi(earnings.last30.netEarnings) : "—"}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span>Gross job volume</span>
+            <span className="ps-nums">{earnings ? formatPi(earnings.grossVolume) : "—"}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span>Paid out to providers</span>
+            <span className="ps-nums">{earnings ? formatPi(earnings.providerPayouts) : "—"}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span>Held in escrow (not revenue)</span>
+            <span className="ps-nums">
+              {escrow ? `${formatPi(escrow.inFlight)} · ${escrow.openJobs} open` : "—"}
+            </span>
+          </div>
+        </div>
+      </Card>
     </div>
   );
 }

@@ -11,3 +11,7 @@ export function formatPi(n: number): number {
   // Round to 2 decimal places for storage/display
   return Math.round(n * 100) / 100;
 }
+
+// Network fee the platform absorbs when its wallet sends an outgoing payout.
+// Recorded on the earnings ledger so "money in" and "money out" stay separate.
+export const PLATFORM_NETWORK_FEE_PI = 0.01;

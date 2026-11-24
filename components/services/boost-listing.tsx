@@ -1,111 +1,102 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { APP_NAME } from "@/lib/services/data";
-import { PRODUCT_CONFIG } from "@/lib/product-config";
-import type { SDKLiteError } from "@/lib/sdklite-types";
 import { backendApi } from "@/lib/backend-api";
 import { useServices } from "@/contexts/services-context";
+import { BOOST_DURATION_DAYS, BOOST_MEMO, BOOST_PRICE_PI } from "@/lib/boost-config";
+import { track } from "@/lib/analytics";
 import { Button, Card, Pill } from "./ui";
 
-type PurchaseProduct = {
-  id: string;
-  slug?: string;
-  name?: string;
-  price_in_pi?: number;
-};
+function formatDay(ms: number): string {
+  return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
-export function BoostListing({ listingId }: { listingId: string }) {
-  const { sdk, products, restoredPurchases, accessToken } = usePiAuth();
+export function BoostListing({ listingId, boostedUntil }: { listingId: string; boostedUntil?: number }) {
+  const { accessToken } = usePiAuth();
   const { refreshServices } = useServices();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [tone, setTone] = useState<"success" | "danger" | "warning">("success");
+  const [tone, setTone] = useState<"success" | "warning" | "danger">("success");
+  const [activeUntil, setActiveUntil] = useState<number | null>(boostedUntil ?? null);
 
-  const product = useMemo(
-    () => products?.find((item) => item.id === PRODUCT_CONFIG.PRODUCT_6a848a24d3af48f0894a8564) as PurchaseProduct | undefined,
-    [products],
-  );
-  const quantity = restoredPurchases?.find((purchase) => purchase.productId === product?.slug)?.quantity ?? 0;
-  const amount = product?.price_in_pi;
-  const productSlug = product?.slug;
-  const unavailable = !product || !productSlug || !sdk;
+  const active = (activeUntil ?? 0) > Date.now();
+  const paymentReady = typeof window !== "undefined" && typeof window.Pi?.createPayment === "function";
+  const unavailable = !accessToken || !paymentReady;
 
-  // Reconciliation: if Pi's restored purchases show this product as owned
-  // but our backend's `boosted_until` isn't set / is expired, attempt to
-  // confirm the boost on the backend using the purchase data from SDK.
-  useEffect(() => {
-    let cancelled = false;
-    const tryReconcile = async () => {
-      if (!accessToken || !productSlug) return;
-      const restored = restoredPurchases?.find((p) => p.productId === productSlug && (p as any).quantity > 0) as any | undefined;
-      if (!restored) return;
-
-      // The SDK's `restore()` / `purchases()` response is `UserPurchaseBalance[]`
-      // (see lib/sdklite-types.ts) and only guarantees `productId` + `quantity`.
-      // If the restored entry contains `paymentId`/`txid` fields (some SDKs
-      // may include richer metadata), use them to reconcile. Otherwise we
-      // cannot confirm the payment server-side and must skip reconciliation.
-      const paymentId = restored.paymentId ?? restored.payment_id ?? restored.payment?.paymentId ?? (restored as any).paymentId;
-      const txid = restored.txid ?? restored.tx_id ?? restored.payment?.txid ?? (restored as any).txid;
-
-      if (!paymentId) {
-        // nothing we can do without a server-side payment identifier
-        // keep this silent — it's informational for debugging
-        console.debug("[Boost] Restored purchase found but missing paymentId; cannot reconcile automatically.", { restored });
-        return;
-      }
-
-      try {
-        await backendApi.services.confirmBoost(listingId, paymentId, txid ?? "", accessToken);
-        if (cancelled) return;
-        await refreshServices();
-        console.debug("[Boost] Reconciled restored purchase for", listingId, paymentId);
-      } catch (err) {
-        // swallow errors — reconciliation is best-effort and should not
-        // surface to the user (they already paid).
-        console.error("[Boost] Reconciliation attempt failed:", err);
-      }
-    };
-
-    void tryReconcile();
-    return () => {
-      cancelled = true;
-    };
-  }, [restoredPurchases, productSlug, accessToken, listingId, refreshServices]);
+  const post = async (path: string, payload: Record<string, unknown>) => {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      throw new Error(typeof data?.error === "string" ? data.error : "The purchase could not be confirmed.");
+    }
+    return res.json().catch(() => ({}));
+  };
 
   const purchase = async () => {
-    if (unavailable || busy) return;
+    if (unavailable || busy || !accessToken) return;
     setBusy(true);
     setMessage(null);
+    let cancelled = false;
+
     try {
-      const result = await sdk.makePurchase(productSlug);
-      if (result.ok) {
-        if (accessToken) {
-          try {
-            await backendApi.services.confirmBoost(listingId, result.paymentId, result.txid, accessToken);
-            await refreshServices();
-          } catch (confirmErr) {
-            console.error("[Boost] Backend confirmation failed:", confirmErr);
-            // The Pi purchase itself succeeded — don't show this as a failure to
-            // the user, but it does mean boosted_until wasn't set. Worth a retry
-            // path or a webhook-based reconciliation job in production.
-          }
-        }
-        setTone("success");
-        setMessage(`Boost purchased. Payment ${result.paymentId} confirmed.`);
+      await new Promise<void>((resolve, reject) => {
+        window.Pi.createPayment(
+          {
+            amount: BOOST_PRICE_PI,
+            memo: BOOST_MEMO,
+            metadata: { kind: "boost", serviceId: listingId },
+          },
+          {
+            onReadyForServerApproval: async (paymentId: string) => {
+              try {
+                await post("/api/payments/boost/approve", { paymentId, serviceId: listingId });
+              } catch (err) {
+                reject(err);
+              }
+            },
+            onReadyForServerCompletion: async (paymentId: string, txid: string) => {
+              try {
+                await post("/api/payments/boost/complete", { paymentId, txid, serviceId: listingId });
+                const { boostedUntil: until } = await backendApi.services.confirmBoost(
+                  listingId,
+                  paymentId,
+                  txid,
+                  accessToken,
+                );
+                const untilMs = until ? new Date(until).getTime() : Date.now();
+                setActiveUntil(untilMs);
+                setTone("success");
+                setMessage(`Boost active until ${formatDay(untilMs)}.`);
+                track("boost_purchased", { serviceId: listingId, amount: BOOST_PRICE_PI, days: BOOST_DURATION_DAYS });
+                await refreshServices();
+                resolve();
+              } catch (err) {
+                reject(err);
+              }
+            },
+            onCancel: () => {
+              cancelled = true;
+              reject(new Error("cancelled"));
+            },
+            onError: (error: unknown) => reject(error instanceof Error ? error : new Error(String(error))),
+          },
+        );
+      });
+    } catch (err) {
+      if (cancelled) {
+        setTone("warning");
+        setMessage("Purchase cancelled.");
+      } else {
+        console.error("[Boost] purchase failed:", err);
+        setTone("danger");
+        setMessage(err instanceof Error ? err.message : "The purchase could not be completed. Please try again.");
       }
-    } catch (error) {
-      const code = (error as SDKLiteError)?.code;
-      setTone(code === "purchase_cancelled" ? "warning" : "danger");
-      setMessage(
-        code === "product_not_found"
-          ? "This boost is not available right now."
-          : code === "purchase_cancelled"
-            ? "Purchase cancelled."
-            : "The purchase could not be completed. Please try again.",
-      );
     } finally {
       setBusy(false);
     }
@@ -120,18 +111,34 @@ export function BoostListing({ listingId }: { listingId: string }) {
             Place this listing at the top of Home and Category feeds for 7 days.
           </p>
         </div>
-        {quantity > 0 && <Pill tone="success">Purchased</Pill>}
+        {active && <Pill tone="success">Boosted</Pill>}
       </div>
       <Button
         className="mt-3 w-full"
         variant="accent"
         onClick={purchase}
-        disabled={unavailable || busy || quantity > 0}
+        disabled={unavailable || busy}
       >
-        {busy ? "Opening Pi purchase…" : product ? `Boost this listing · ${amount ?? 5} Pi` : "Boost unavailable"}
+        {busy
+          ? "Opening Pi payment…"
+          : active
+            ? `Extend boost · ${BOOST_PRICE_PI} π`
+            : `Boost this listing · ${BOOST_PRICE_PI} π`}
       </Button>
-      {message && <p className={`mt-2 text-xs ${tone === "success" ? "text-success" : tone === "warning" ? "text-warning-foreground" : "text-destructive"}`}>{message}</p>}
-      {!product && <p className="mt-2 text-xs text-warning-foreground">This product is not currently available.</p>}
+      {active && activeUntil && (
+        <p className="mt-2 text-xs text-success">Active until {formatDay(activeUntil)}.</p>
+      )}
+      {!paymentReady && (
+        <p className="mt-2 text-xs text-warning-foreground">Open {APP_NAME} in Pi Browser to buy a boost.</p>
+      )}
+      {paymentReady && !accessToken && (
+        <p className="mt-2 text-xs text-warning-foreground">Sign in with Pi to buy a boost.</p>
+      )}
+      {message && (
+        <p className={`mt-2 text-xs ${tone === "success" ? "text-success" : tone === "warning" ? "text-warning-foreground" : "text-destructive"}`}>
+          {message}
+        </p>
+      )}
       <p className="mt-2 text-[11px] text-muted-foreground">Listing: {listingId.slice(0, 8)}… · One-time purchase</p>
     </Card>
   );

@@ -154,7 +154,8 @@ export const backendApi = {
       request<{ request: any }>(`/api/admin/disputes/${id}`, { method: "PATCH", body, accessToken }),
     resolveDispute: (id: string, body: { favorProvider: boolean; note?: string }, accessToken: string) =>
       request<{ request: any }>(`/api/admin/disputes/${id}/resolve`, { method: "POST", body, accessToken }),
-    dashboard: (accessToken: string) => request<{ counts: any }>(`/api/admin/dashboard`, { accessToken }),
+    dashboard: (accessToken: string) =>
+      request<{ counts: any; earnings?: any; escrow?: any }>(`/api/admin/dashboard`, { accessToken }),
     listUsers: (params?: { search?: string; page?: number; perPage?: number }, accessToken?: string) => {
       const qs = params ? new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))).toString() : "";
       return request<{ users: any[] }>(`/api/admin/users${qs ? `?${qs}` : ""}`, { accessToken });
