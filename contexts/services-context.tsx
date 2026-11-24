@@ -617,6 +617,10 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
     if (piUser?.username) setUsername(piUser.username);
 
     (async () => {
+      // Start the catalogue immediately and let the profile load run alongside
+      // it: the two are independent, and serialising them added a full round
+      // trip to every cold start.
+      const servicesPromise = refreshServices();
       const store = storeRef.current;
       if (accessToken) {
         try {
@@ -685,7 +689,7 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
       // Boot order is deliberate: only the catalogue gates first paint. The
       // user's own hire requests (two paginated round trips) load in the
       // background instead of holding the whole interface on a loading screen.
-      await refreshServices();
+      await servicesPromise;
       if (cancelled) return;
       setReady(true);
 
