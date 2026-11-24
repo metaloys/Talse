@@ -30,12 +30,13 @@ export function verifyBoostPayment(
   payment: PiPaymentLike | null | undefined,
   serviceId: string,
   uid: string,
+  expectedPricePi: number = BOOST_PRICE_PI,
 ): BoostPaymentProblem | null {
   if (!payment) return { error: "Payment not found", status: 404 };
   if (payment.user_uid !== uid) {
     return { error: "Payment does not belong to this user", status: 403 };
   }
-  if (Number(payment.amount) !== BOOST_PRICE_PI) {
+  if (Number(payment.amount) !== expectedPricePi) {
     return { error: "Payment amount does not match the boost price", status: 400 };
   }
 

@@ -5,7 +5,7 @@ import { usePiAuth } from "@/contexts/pi-auth-context";
 import { APP_NAME } from "@/lib/services/data";
 import { backendApi } from "@/lib/backend-api";
 import { useServices } from "@/contexts/services-context";
-import { BOOST_DURATION_DAYS, BOOST_MEMO, BOOST_PRICE_PI } from "@/lib/boost-config";
+import { usePublicConfig } from "@/lib/public-config";
 import { track } from "@/lib/analytics";
 import { Button, Card, Pill } from "./ui";
 
@@ -16,6 +16,9 @@ function formatDay(ms: number): string {
 export function BoostListing({ listingId, boostedUntil }: { listingId: string; boostedUntil?: number }) {
   const { accessToken } = usePiAuth();
   const { refreshServices } = useServices();
+  const config = usePublicConfig();
+  const boostPrice = config.boostPricePi;
+  const boostDays = config.boostDurationDays;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "warning" | "danger">("success");
@@ -48,8 +51,8 @@ export function BoostListing({ listingId, boostedUntil }: { listingId: string; b
       await new Promise<void>((resolve, reject) => {
         window.Pi.createPayment(
           {
-            amount: BOOST_PRICE_PI,
-            memo: BOOST_MEMO,
+            amount: boostPrice,
+            memo: config.boostMemo,
             metadata: { kind: "boost", serviceId: listingId },
           },
           {
@@ -73,7 +76,7 @@ export function BoostListing({ listingId, boostedUntil }: { listingId: string; b
                 setActiveUntil(untilMs);
                 setTone("success");
                 setMessage(`Boost active until ${formatDay(untilMs)}.`);
-                track("boost_purchased", { serviceId: listingId, amount: BOOST_PRICE_PI, days: BOOST_DURATION_DAYS });
+                track("boost_purchased", { serviceId: listingId, amount: boostPrice, days: boostDays });
                 await refreshServices();
                 resolve();
               } catch (err) {
@@ -108,7 +111,7 @@ export function BoostListing({ listingId, boostedUntil }: { listingId: string; b
         <div>
           <p className="text-sm font-bold text-foreground">Featured Listing Boost</p>
           <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Place this listing at the top of Home and Category feeds for 7 days.
+            Place this listing at the top of Home and Category feeds for {boostDays} days.
           </p>
         </div>
         {active && <Pill tone="success">Boosted</Pill>}
@@ -122,8 +125,8 @@ export function BoostListing({ listingId, boostedUntil }: { listingId: string; b
         {busy
           ? "Opening Pi payment…"
           : active
-            ? `Extend boost · ${BOOST_PRICE_PI} π`
-            : `Boost this listing · ${BOOST_PRICE_PI} π`}
+            ? `Extend boost · ${boostPrice} π`
+            : `Boost this listing · ${boostPrice} π`}
       </Button>
       {active && activeUntil && (
         <p className="mt-2 text-xs text-success">Active until {formatDay(activeUntil)}.</p>

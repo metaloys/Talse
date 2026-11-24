@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { checkRateLimit } from "@/lib/rate-limit";
-import { completePayment, getPayment, sendInAppNotifications } from "@/lib/pi-platform";
+import { completePayment, getPayment } from "@/lib/pi-platform";
+import { notifyUsers } from "@/lib/notify";
 import { finalizePaymentLock } from "@/lib/dispute-resolution";
 
 /**
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
 
     // Tell the provider the money is safely held and work can start.
     try {
-      await sendInAppNotifications([
+      await notifyUsers([
         {
           title: "Payment secured",
           body: `${me.username} funded the escrow. You can start the work.`,

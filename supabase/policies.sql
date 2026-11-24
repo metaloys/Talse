@@ -13,6 +13,7 @@ alter table hire_requests enable row level security;
 alter table messages      enable row level security;
 alter table reviews       enable row level security;
 alter table boost_purchases enable row level security;
+alter table notifications enable row level security;
 
 -- Public read access for browsing the marketplace (home/search/category screens)
 create policy "services are publicly readable"

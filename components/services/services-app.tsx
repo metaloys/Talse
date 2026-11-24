@@ -7,6 +7,7 @@ import { ServicesProvider, useServices } from "@/contexts/services-context";
 import { LoadingScreen, Overlay, StorageNotice, ToastHost } from "./feedback";
 import { BottomNav } from "./bottom-nav";
 import { HomeScreen } from "./home-screen";
+import { NotificationInbox, useNotifications } from "./notifications-inbox";
 import { track, trackAppOpen } from "@/lib/analytics";
 
 // Everything below is behind a user action or a tab switch, so it is code-split
@@ -30,6 +31,9 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
   const { ready, storageTrouble, toasts, dismissToast, incoming, getService } = useServices();
 
   const [tab, setTab] = useState<TabId>("home");
+
+  const notifications = useNotifications();
+  const [inboxOpen, setInboxOpen] = useState(false);
 
   // search preset (category hand-off from home/categories)
   const [presetCategory, setPresetCategory] = useState<CategoryId | "all">("all");
@@ -118,6 +122,22 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
     setProviderOpen(true);
   };
 
+  // Tap-through from the notifications inbox. Only routes we can resolve in-app
+  // are handled; anything else just closes the inbox.
+  const handleNotificationNavigate = (subroute: string) => {
+    const hire = subroute.match(/^\/hire-requests\/([^/?#]+)/);
+    if (hire) {
+      setInitialOpenRequestId(hire[1]);
+      setTab("activity");
+      return;
+    }
+    const svc = subroute.match(/^\/services\/([^/?#]+)/);
+    if (svc) {
+      const found = getService(svc[1]);
+      if (found) openService(found);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <StorageNotice show={storageTrouble} />
@@ -161,6 +181,18 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
         active={tab}
         onChange={setTab}
         activityCount={incoming.filter((r) => r.status === "pending").length}
+        unreadCount={notifications.unread}
+        onOpenNotifications={() => {
+          setInboxOpen(true);
+          void notifications.load().then(() => notifications.markAllSeen());
+        }}
+      />
+
+      <NotificationInbox
+        open={inboxOpen}
+        onClose={() => setInboxOpen(false)}
+        items={notifications.items}
+        onNavigate={handleNotificationNavigate}
       />
 
       {/* overlays — mounted only while open, so their code is fetched on

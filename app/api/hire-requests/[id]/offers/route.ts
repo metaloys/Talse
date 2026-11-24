@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { assertNotSuspended, SuspendedError } from "@/lib/suspension";
-import { sendInAppNotifications } from "@/lib/pi-platform";
+import { notifyUsers } from "@/lib/notify";
 
 const MAX_AMOUNT = 100000;
 
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const otherUid = hr.buyer_uid === me.uid ? hr.provider_uid : hr.buyer_uid;
     try {
-      await sendInAppNotifications([
+      await notifyUsers([
         {
           title: "New price offer",
           body: `${me.username} proposed ${amount} π. Accept or decline in Talse.`,

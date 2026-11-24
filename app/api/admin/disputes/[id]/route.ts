@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
-import { requireAdmin, NotAdminError } from "@/lib/admin";
+import { authorizeAdmin, adminError, writeAudit } from "@/lib/admin-route";
 
 // PATCH /api/admin/disputes/[id] — non-monetary dispute actions: mark under
 // investigation, escalate, or just save a note. For the two outcomes that
 // actually move money (release to provider / refund buyer), use
-// /api/admin/disputes/[id]/resolve instead.
+// /api/admin/disputes/[id]/resolve instead. Role-aware and audited, like the
+// other console mutations.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const me = await verifyPiToken(req.headers.get("authorization"));
-    requireAdmin(me.uid);
+    const access = await authorizeAdmin(req, "disputes");
 
     const { stage, note } = await req.json();
     if (stage && !["investigating", "escalated"].includes(stage)) {
@@ -20,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const { data: existing, error: fetchErr } = await supabaseAdmin
       .from("hire_requests")
-      .select("status")
+      .select("status, dispute_stage, admin_note")
       .eq("id", id)
       .single();
     if (fetchErr || !existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -43,10 +42,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       .select()
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    await writeAudit({
+      adminUid: access.uid,
+      action: "dispute.update",
+      targetType: "dispute",
+      targetId: id,
+      previousState: { dispute_stage: existing.dispute_stage, admin_note: existing.admin_note },
+      newState: { dispute_stage: stage ?? existing.dispute_stage, admin_note: note !== undefined ? note : existing.admin_note },
+      reason: typeof note === "string" ? note : null,
+    });
+
     return NextResponse.json({ request: data });
   } catch (err) {
-    if (err instanceof NotAdminError) return NextResponse.json({ error: err.message }, { status: err.status });
-    if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return adminError(err, "dispute-update");
   }
 }

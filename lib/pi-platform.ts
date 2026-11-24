@@ -155,10 +155,42 @@ export async function createA2UPayment(params: {
   }
 }
 
-export async function sendInAppNotifications(notifications: Array<{ title: string; body: string; user_uid: string; subroute?: string }>) {
+/**
+ * One in-app notification for the Pi Platform API.
+ *
+ * `subroute` is REQUIRED by Pi (it must start with "/") because that is the
+ * route the Pi App opens when the user taps the notification. Making it
+ * required here means a malformed notice fails loudly and immediately instead
+ * of being silently rejected by Pi with a 422.
+ */
+export type InAppNotification = {
+  title: string;
+  body: string;
+  user_uid: string;
+  subroute: string;
+};
+
+export type InAppNotificationResult = {
+  sent: number;
+  delivered: number;
+  delivered_notifications: unknown[];
+  [key: string]: unknown;
+};
+
+export async function sendInAppNotifications(
+  notifications: InAppNotification[]
+): Promise<InAppNotificationResult> {
   if (!Array.isArray(notifications)) throw new Error("notifications must be an array");
-  if (notifications.length === 0) return { sent: 0 };
+  if (notifications.length === 0) return { sent: 0, delivered: 0, delivered_notifications: [] };
   if (notifications.length > 256) throw new Error("Too many notifications; max 256 at once");
+
+  // Fail before the network call on the two things Pi rejects: missing
+  // subroute, or one that doesn't start with "/".
+  for (const n of notifications) {
+    if (!n.subroute || typeof n.subroute !== "string" || !n.subroute.startsWith("/")) {
+      throw new Error(`In-app notification needs a subroute starting with "/" (got ${JSON.stringify(n.subroute)})`);
+    }
+  }
 
   const sig = withTimeoutSignal();
   try {
@@ -169,7 +201,19 @@ export async function sendInAppNotifications(notifications: Array<{ title: strin
       signal: sig.signal,
     });
     if (!res.ok) throw new Error(`Pi notify failed (${res.status}): ${await res.text()}`);
-    return res.json();
+    const json: Record<string, unknown> = await res.json().catch(() => ({}));
+    // Pi delivery is best-effort per user: a recipient who never granted the
+    // `in_app_notifications` scope (or disabled them in the Pi App) is dropped
+    // from `delivered_notifications` with NO error. Report the real ratio so
+    // this is visible in logs instead of masquerading as success.
+    const delivered = Array.isArray(json.delivered_notifications) ? json.delivered_notifications : [];
+    if (delivered.length < notifications.length) {
+      console.warn(
+        `[Pi notify] delivered ${delivered.length}/${notifications.length} in-app notifications ` +
+          `(the rest were dropped — usually the recipient has not granted the in_app_notifications scope)`
+      );
+    }
+    return { ...json, sent: notifications.length, delivered: delivered.length, delivered_notifications: delivered };
   } catch (err) {
     if (err instanceof Error && err.name === "AbortError") throw new Error("Pi notify timed out");
     throw err;

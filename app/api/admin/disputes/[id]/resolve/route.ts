@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
-import { requireAdmin, NotAdminError } from "@/lib/admin";
+import { PiAuthError } from "@/lib/pi-verify";
+import { NotAdminError } from "@/lib/admin";
+import { authorizeAdmin, adminError, writeAudit } from "@/lib/admin-route";
 import { payoutHireRequest, PayoutNotConfiguredError, PayoutWalletBusyError, PayoutWalletLeaseLostError } from "@/lib/dispute-resolution";
 
 // POST /api/admin/disputes/[id]/resolve — { favorProvider: boolean, note? }
 // The one place a dispute actually moves money: releases to the provider
 // (dispute rejected / resolved in provider's favor) or refunds the buyer
-// (resolved in buyer's favor). Records who resolved it and how.
+// (resolved in buyer's favor). Records who resolved it, how, and why — the
+// resolution now writes an admin audit row, since it is the single most
+// consequential action in the console.
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
-    const me = await verifyPiToken(req.headers.get("authorization"));
-    requireAdmin(me.uid);
+    const access = await authorizeAdmin(req, "escrow");
 
     const { favorProvider, note } = await req.json();
     if (typeof favorProvider !== "boolean") {
@@ -21,7 +23,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const { data: existing, error: fetchErr } = await supabaseAdmin
       .from("hire_requests")
-      .select("status")
+      .select("status, amount, dispute_reason, dispute_filed_by")
       .eq("id", id)
       .single();
     if (fetchErr || !existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -38,7 +40,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const data = await payoutHireRequest({
       hireRequestId: id,
       favor: favorProvider ? "provider" : "buyer",
-      resolvedBy: me.uid,
+      resolvedBy: access.uid,
+    });
+
+    await writeAudit({
+      adminUid: access.uid,
+      action: favorProvider ? "dispute.resolve_provider" : "dispute.resolve_buyer",
+      targetType: "dispute",
+      targetId: id,
+      previousState: { status: "disputed", amount: existing.amount, dispute_reason: existing.dispute_reason },
+      newState: { status: (data as { status?: string } | null)?.status ?? (favorProvider ? "released" : "refunded") },
+      reason: typeof note === "string" ? note : null,
     });
 
     return NextResponse.json({ request: data });
@@ -48,6 +60,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     if (err instanceof PayoutNotConfiguredError) return NextResponse.json({ error: err.message }, { status: err.status });
     if (err instanceof PayoutWalletBusyError || err instanceof PayoutWalletLeaseLostError)
       return NextResponse.json({ error: err.message }, { status: err.status });
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
+    return adminError(err, "dispute-resolve");
   }
 }

@@ -4,6 +4,7 @@ import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { completePayment, getPayment } from "@/lib/pi-platform";
 import { verifyBoostPayment } from "@/lib/boost-verify";
+import { getBoostPricePi } from "@/lib/platform-settings";
 
 /**
  * POST /api/payments/boost/complete  { paymentId, txid, serviceId }
@@ -36,7 +37,7 @@ export async function POST(req: NextRequest) {
     }
 
     const payment = await getPayment(paymentId);
-    const problem = verifyBoostPayment(payment, serviceId, me.uid);
+    const problem = verifyBoostPayment(payment, serviceId, me.uid, await getBoostPricePi());
     if (problem) return NextResponse.json({ error: problem.error }, { status: problem.status });
 
     if (!payment.status?.developer_completed) {

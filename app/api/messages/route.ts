@@ -4,7 +4,7 @@ import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { MESSAGE_MAX } from "@/lib/services/data";
 import { makeSignedUrl } from "@/lib/storage-utils";
-import { sendInAppNotifications } from "@/lib/pi-platform";
+import { notifyUsers } from "@/lib/notify";
 
 async function assertParticipant(hireRequestId: string, uid: string): Promise<NextResponse | null> {
   const { data, error } = await supabaseAdmin
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
       if (hr) {
         const otherUid = hr.buyer_uid === me.uid ? hr.provider_uid : hr.buyer_uid;
         const excerpt = typeof text === "string" && text.trim().length > 0 ? text.trim().slice(0, 140) : "Sent an attachment";
-        await sendInAppNotifications([
+        await notifyUsers([
           { title: "New message", body: excerpt, user_uid: otherUid, subroute: `/hire-requests/${hireRequestId}` },
         ]);
       }

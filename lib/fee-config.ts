@@ -1,3 +1,11 @@
+// Server-side, DB-backed fee (admin-editable via the console). Kept separate
+// from the synchronous version below so client-shared code and the env default
+// keep working unchanged.
+export async function getPlatformFeePercentAsync(): Promise<number> {
+  const { getPlatformFeePercentAsync: read } = await import("@/lib/platform-settings");
+  return read();
+}
+
 export function getPlatformFeePercent(): number {
   // Read from env var PLATFORM_FEE_PERCENT (e.g. "0.10" for 10%)
   const raw = process.env.PLATFORM_FEE_PERCENT;

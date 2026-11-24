@@ -4,6 +4,7 @@ import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { approvePayment, getPayment } from "@/lib/pi-platform";
 import { verifyBoostPayment } from "@/lib/boost-verify";
+import { getBoostPricePi } from "@/lib/platform-settings";
 
 /**
  * POST /api/payments/boost/approve  { paymentId, serviceId }
@@ -36,7 +37,9 @@ export async function POST(req: NextRequest) {
     }
 
     const payment = await getPayment(paymentId);
-    const problem = verifyBoostPayment(payment, serviceId, me.uid);
+    // The price is admin-configurable; validate against the live setting rather
+    // than the compile-time constant so a price change is enforced immediately.
+    const problem = verifyBoostPayment(payment, serviceId, me.uid, await getBoostPricePi());
     if (problem) return NextResponse.json({ error: problem.error }, { status: problem.status });
 
     if (!payment.status?.developer_approved) {

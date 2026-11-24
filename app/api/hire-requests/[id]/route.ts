@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { makeSignedUrl } from "@/lib/storage-utils";
-import { sendInAppNotifications } from "@/lib/pi-platform";
+import { notifyUsers } from "@/lib/notify";
 import { assertNotSuspended, SuspendedError } from "@/lib/suspension";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -151,7 +151,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       };
       const title = titleMap[nextStatus] ?? "Request updated";
       const body = bodyMap[nextStatus] ?? `Request status changed to ${nextStatus}`;
-      await sendInAppNotifications([
+      await notifyUsers([
         { title, body, user_uid: otherUid, subroute: `/hire-requests/${id}` },
       ]);
     } catch (notifyErr) {

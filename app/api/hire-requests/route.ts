@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { assertNotSuspended, SuspendedError } from "@/lib/suspension";
-import { sendInAppNotifications } from "@/lib/pi-platform";
+import { notifyUsers } from "@/lib/notify";
 
 // GET /api/hire-requests?role=incoming|outgoing — scoped to the caller.
 export async function GET(req: NextRequest) {
@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
     // Notify the provider that a new request is waiting. Non-blocking: a
     // notification failure must never fail the hire request itself.
     try {
-      await sendInAppNotifications([
+      await notifyUsers([
         {
           title: "New hire request",
           body: `${me.username} wants to hire you for "${String(service.title).slice(0, 60)}" (${service.price} π).`,

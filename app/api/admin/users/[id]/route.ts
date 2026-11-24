@@ -3,6 +3,54 @@ import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { requireAdmin, NotAdminError } from "@/lib/admin";
 
+// GET /api/admin/users/[id] — full user drill-down for the console.
+// Profile + aggregated counters come from v_users_admin; the activity lists are
+// the same shapes the Orders/Listings/Reviews screens use, so the drawer can
+// reuse their rendering. Replaces the old raw-JSON detail view.
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const me = await verifyPiToken(req.headers.get("authorization"));
+    requireAdmin(me.uid);
+
+    const [profileRes, listingsRes, asBuyerRes, asProviderRes, reviewsRes, reportsFiledRes, reportsAgainstRes, auditRes] =
+      await Promise.all([
+        supabaseAdmin.from("v_users_admin").select("*").eq("pi_uid", id).maybeSingle(),
+        supabaseAdmin.from("v_services_admin").select("*").eq("owner_uid", id).order("created_at", { ascending: false }),
+        supabaseAdmin.from("v_orders_admin").select("*").eq("buyer_uid", id).order("created_at", { ascending: false }).limit(50),
+        supabaseAdmin.from("v_orders_admin").select("*").eq("provider_uid", id).order("created_at", { ascending: false }).limit(50),
+        supabaseAdmin.from("reviews").select("*").eq("provider_uid", id).order("created_at", { ascending: false }).limit(50),
+        supabaseAdmin.from("reports").select("*").eq("reporter_uid", id).order("created_at", { ascending: false }).limit(50),
+        supabaseAdmin.from("reports").select("*").eq("target_type", "user").eq("target_id", id).order("created_at", { ascending: false }).limit(50),
+        supabaseAdmin
+          .from("admin_audit_events")
+          .select("id, admin_uid, action, reason, created_at")
+          .eq("target_type", "user")
+          .eq("target_id", id)
+          .order("created_at", { ascending: false })
+          .limit(50),
+      ]);
+
+    if (!profileRes.data) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
+    return NextResponse.json({
+      profile: profileRes.data,
+      listings: listingsRes.data ?? [],
+      ordersAsBuyer: asBuyerRes.data ?? [],
+      ordersAsProvider: asProviderRes.data ?? [],
+      reviews: reviewsRes.data ?? [],
+      reportsFiled: reportsFiledRes.data ?? [],
+      reportsAgainst: reportsAgainstRes.data ?? [],
+      audit: auditRes.data ?? [],
+    });
+  } catch (err) {
+    if (err instanceof NotAdminError) return NextResponse.json({ error: err.message }, { status: err.status });
+    if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
+    console.error("[admin:users:detail] failed:", err instanceof Error ? err.message : err);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+  }
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;

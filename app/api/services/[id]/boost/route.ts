@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { getPayment } from "@/lib/pi-platform";
-import { BOOST_DURATION_DAYS } from "@/lib/boost-config";
 import { verifyBoostPayment } from "@/lib/boost-verify";
+import { getBoostPricePi, getBoostDurationDays } from "@/lib/platform-settings";
 
 // POST /api/services/[id]/boost — called after Pi.createPayment() completes
 // (approve + complete on /api/payments/boost/*). Verifies the payment
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
     // Must be the boost payment for THIS listing at the boost price: otherwise
     // a 5 π escrow top-up could be replayed as a free boost, or vice versa.
-    const problem = verifyBoostPayment(payment, id, me.uid);
+    const problem = verifyBoostPayment(payment, id, me.uid, await getBoostPricePi());
     if (problem) return NextResponse.json({ error: problem.error }, { status: problem.status });
 
     // Idempotency: if this exact paymentId was already recorded, do not
@@ -74,7 +74,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     // so the ownership check is low-risk compared to the payout race in
     // lib/dispute-resolution.ts. The service owner is still verified immediately
     // before the update, then the row update is bound to the same service id.
-    const boostedUntil = new Date(Date.now() + BOOST_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const durationDays = await getBoostDurationDays();
+    const boostedUntil = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
 
     const { error: updateErr } = await supabaseAdmin
       .from("services")

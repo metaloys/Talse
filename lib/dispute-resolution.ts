@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { createA2UPayment, completePayment, getIncompleteServerPayments, cancelPayment, getPayment, sendInAppNotifications } from "@/lib/pi-platform";
+import { createA2UPayment, completePayment, getIncompleteServerPayments, cancelPayment, getPayment } from "@/lib/pi-platform";
+import { notifyUsers } from "@/lib/notify";
 import { submitA2UPayment } from "@/lib/pi-a2u";
-import { getPlatformFeePercent, formatPi, PLATFORM_NETWORK_FEE_PI } from "@/lib/fee-config";
+import { getPlatformFeePercentAsync, formatPi, PLATFORM_NETWORK_FEE_PI } from "@/lib/fee-config";
 
 export class PayoutNotConfiguredError extends Error {
   status = 503;
@@ -306,7 +307,7 @@ export async function reconcileStalePayoutLock(hireRequestId: string, favor: "pr
           const userUid = favor === "provider" ? resolvedReq.provider_uid : resolvedReq.buyer_uid;
           const title = favor === "provider" ? "You received a payout" : "Refund issued";
           const body = favor === "provider" ? `Funds released for hire request ${hireRequestId}` : `A refund was issued for hire request ${hireRequestId}`;
-          await sendInAppNotifications([{ title, body, user_uid: userUid, subroute: `/hire-requests/${hireRequestId}` }]);
+          await notifyUsers([{ title, body, user_uid: userUid, subroute: `/hire-requests/${hireRequestId}` }]);
         } catch (notifyErr) {
           // Non-blocking: do not fail payout if notifications fail.
 
@@ -562,7 +563,7 @@ export async function payoutHireRequest(params: {
             const userUid = params.favor === "provider" ? data.provider_uid : data.buyer_uid;
             const title = params.favor === "provider" ? "You received a payout" : "Refund issued";
             const body = params.favor === "provider" ? `Funds released for hire request ${params.hireRequestId}` : `A refund was issued for hire request ${params.hireRequestId}`;
-            await sendInAppNotifications([{ title, body, user_uid: userUid, subroute: `/hire-requests/${params.hireRequestId}` }]);
+            await notifyUsers([{ title, body, user_uid: userUid, subroute: `/hire-requests/${params.hireRequestId}` }]);
           } catch (notifyErr) {
             // Non-blocking: log and continue
 
@@ -641,7 +642,7 @@ export async function payoutHireRequest(params: {
     // is made whole with the full gross amount. The fee only applies when the
     // provider is paid for completed work.
     gross = Number(hr.amount);
-    feePercent = params.favor === "provider" ? getPlatformFeePercent() : 0;
+    feePercent = params.favor === "provider" ? await getPlatformFeePercentAsync() : 0;
     platformFee = formatPi(gross * feePercent);
     workerPayout = formatPi(gross - platformFee);
   } catch (preflightErr) {
@@ -786,7 +787,7 @@ export async function payoutHireRequest(params: {
       const userUid = params.favor === "provider" ? data.provider_uid : data.buyer_uid;
       const title = params.favor === "provider" ? "You received a payout" : "Refund issued";
       const body = params.favor === "provider" ? `Funds released for hire request ${params.hireRequestId}` : `A refund was issued for hire request ${params.hireRequestId}`;
-      await sendInAppNotifications([{ title, body, user_uid: userUid, subroute: `/hire-requests/${params.hireRequestId}` }]);
+      await notifyUsers([{ title, body, user_uid: userUid, subroute: `/hire-requests/${params.hireRequestId}` }]);
     } catch (notifyErr) {
       // Non-blocking: log and continue
 

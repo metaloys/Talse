@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { requireAdmin, NotAdminError } from "@/lib/admin";
+import { writeAudit } from "@/lib/admin-route";
 
 // PATCH /api/admin/categories/:id - edit category (admin only)
 export async function PATCH(req: NextRequest) {
@@ -21,8 +22,10 @@ export async function PATCH(req: NextRequest) {
     if (typeof body.active === "boolean") allowed.active = body.active;
     if (typeof body.sort_order === "number") allowed.sort_order = body.sort_order;
 
+    const { data: before } = await supabaseAdmin.from("categories").select("*").eq("id", id).maybeSingle();
     const { data, error } = await supabaseAdmin.from("categories").update(allowed).eq("id", id).select("*").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await writeAudit({ adminUid: me.uid, action: "category.update", targetType: "category", targetId: id, previousState: before, newState: allowed });
     return NextResponse.json({ category: data });
   } catch (err) {
     if (err instanceof NotAdminError) return NextResponse.json({ error: err.message }, { status: err.status });

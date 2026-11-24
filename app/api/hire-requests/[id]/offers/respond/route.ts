@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { assertNotSuspended, SuspendedError } from "@/lib/suspension";
-import { sendInAppNotifications } from "@/lib/pi-platform";
+import { notifyUsers } from "@/lib/notify";
 
 /**
  * POST /api/hire-requests/[id]/offers/respond
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     try {
       const responderIsBuyer = hr.buyer_uid === me.uid;
-      await sendInAppNotifications([
+      await notifyUsers([
         {
           title: accept ? "Offer accepted" : "Offer declined",
           body: accept
