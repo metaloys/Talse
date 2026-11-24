@@ -35,12 +35,14 @@ export function ProfileScreen({
   onOpenService,
   onOpenReviews,
   onOpenAdmin,
+  headerAction,
 }: {
   onCreate: () => void;
   onEditService: (s: Service) => void;
   onOpenService: (s: Service) => void;
   onOpenReviews: () => void;
   onOpenAdmin: () => void;
+  headerAction?: React.ReactNode;
 }) {
   const { profile, username, myListings, saveProfile, toggleServiceActive, deleteService } = useServices();
   const { accessToken, logout } = usePiAuth();
@@ -140,13 +142,16 @@ export function ProfileScreen({
             </div>
           </div>
           {!editing && (
-            <button
-              onClick={startEdit}
-              aria-label="Edit profile"
-              className="ps-press flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground"
-            >
-              <IconEdit size={16} />
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {headerAction}
+              <button
+                onClick={startEdit}
+                aria-label="Edit profile"
+                className="ps-press flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground"
+              >
+                <IconEdit size={16} />
+              </button>
+            </div>
           )}
         </div>
 

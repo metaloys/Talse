@@ -14,7 +14,7 @@ import { IconInbox, IconSend, IconPaperclip, IconTrash } from "./icons";
 // single "accepted" status from the old mocked flow.
 const MESSAGING_STATUSES = new Set(["accepted", "locked", "delivered", "released", "disputed"]);
 
-export function MessagesScreen({ initialRequestId }: { initialRequestId?: string }) {
+export function MessagesScreen({ initialRequestId, headerAction }: { initialRequestId?: string; headerAction?: React.ReactNode }) {
   const { requests, messagesForRequest, sendMessage, loadMessagesForRequest, currentUid } = useServices();
   const accepted = useMemo(() => requests.filter((r) => MESSAGING_STATUSES.has(r.status)), [requests]);
   const [selectedId, setSelectedId] = useState<string | null>(accepted[0]?.id ?? null);
@@ -72,8 +72,13 @@ export function MessagesScreen({ initialRequestId }: { initialRequestId?: string
   return (
     <div className="mx-auto max-w-md pb-24">
       <header className="ps-hero-grad px-4 pb-4 pt-4 ps-safe-top">
-        <p className="ps-eyebrow">Private workspace</p>
-        <h1 className="mt-1 text-2xl font-bold text-foreground">Messages</h1>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="ps-eyebrow">Private workspace</p>
+            <h1 className="mt-1 text-2xl font-bold text-foreground">Messages</h1>
+          </div>
+          {headerAction}
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">Conversation history for accepted hire requests.</p>
       </header>
       <div className="grid gap-3 px-4 pt-4">

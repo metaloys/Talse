@@ -24,10 +24,12 @@ export function SearchScreen({
   presetCategory,
   presetNonce,
   onOpenService,
+  headerAction,
 }: {
   presetCategory: CategoryId | "all";
   presetNonce: number;
   onOpenService: (s: Service) => void;
+  headerAction?: React.ReactNode;
 }) {
   const { allServices } = useServices();
   const [serverRows, setServerRows] = useState<any[] | null>(null);
@@ -140,7 +142,10 @@ export function SearchScreen({
   return (
     <div className="mx-auto max-w-md pb-24">
       <div className="ps-hero-grad px-4 pb-4 pt-4 ps-safe-top">
-        <h1 className="text-2xl font-bold text-foreground">Find services</h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold text-foreground">Find services</h1>
+          {headerAction}
+        </div>
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
           <Chip active={category === "all"} onClick={() => setCategory("all")}>
             All

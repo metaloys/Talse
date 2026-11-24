@@ -11,7 +11,7 @@ import { Overlay } from "./feedback";
 import { RequestTimeline } from "./request-timeline";
 import { IconStar } from "./icons";
 
-export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages, onViewDispute }: { onBrowse: () => void; initialOpenRequestId?: string | null; onOpenMessages?: (requestId: string) => void; onViewDispute?: (requestId: string) => void }) {
+export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages, onViewDispute, headerAction }: { onBrowse: () => void; initialOpenRequestId?: string | null; onOpenMessages?: (requestId: string) => void; onViewDispute?: (requestId: string) => void; headerAction?: React.ReactNode }) {
   const { outgoing, incoming, setRequestStatus, makeOffer, respondToOffer, pushToast, requests } = useServices();
   const { accessToken } = usePiAuth();
   const [openRequest, setOpenRequest] = useState<string | null>(null);
@@ -360,7 +360,10 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
   return (
     <div className="mx-auto max-w-md pb-24">
       <div className="ps-hero-grad px-4 pb-4 pt-4 ps-safe-top">
-        <h1 className="text-2xl font-bold text-foreground">My activity</h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-bold text-foreground">My activity</h1>
+          {headerAction}
+        </div>
         <p className="mt-1 text-sm text-muted-foreground">A single timeline of work requests and status updates.</p>
       </div>
 

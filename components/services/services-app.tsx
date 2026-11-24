@@ -8,6 +8,7 @@ import { LoadingScreen, Overlay, StorageNotice, ToastHost } from "./feedback";
 import { BottomNav } from "./bottom-nav";
 import { HomeScreen } from "./home-screen";
 import { NotificationInbox, useNotifications } from "./notifications-inbox";
+import { NotificationBell } from "./notification-bell";
 import { track, trackAppOpen } from "@/lib/analytics";
 
 // Everything below is behind a user action or a tab switch, so it is code-split
@@ -138,6 +139,16 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
     }
   };
 
+  const openNotifications = () => {
+    setInboxOpen(true);
+    void notifications.load().then(() => notifications.markAllSeen());
+  };
+
+  // One bell, rendered into each tab's header (top-right) so alerts live in the
+  // top bar like the rest of the Pi app ecosystem and the bottom nav keeps its
+  // five primary destinations.
+  const notificationBell = <NotificationBell unread={notifications.unread} onClick={openNotifications} />;
+
   return (
     <div className="min-h-screen bg-background">
       <StorageNotice show={storageTrouble} />
@@ -149,6 +160,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
           onOpenCategory={openCategory}
           onCreate={openCreate}
           onSeeAll={seeAll}
+          headerAction={notificationBell}
         />
       )}
       {tab === "search" && (
@@ -156,6 +168,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
           presetCategory={presetCategory}
           presetNonce={presetNonce}
           onOpenService={openService}
+          headerAction={notificationBell}
         />
       )}
       {tab === "activity" && (
@@ -164,9 +177,10 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
           initialOpenRequestId={initialOpenRequestId}
           onOpenMessages={(requestId) => { setMessagesDeepLinkId(requestId); setTab("messages"); }}
           onViewDispute={(requestId) => { setDisputeRequestId(requestId); setDisputesOpen(true); }}
+          headerAction={notificationBell}
         />
       )}
-      {tab === "messages" && <MessagesScreen initialRequestId={messagesDeepLinkId ?? undefined} />}
+      {tab === "messages" && <MessagesScreen initialRequestId={messagesDeepLinkId ?? undefined} headerAction={notificationBell} />}
       {tab === "profile" && (
         <ProfileScreen
           onCreate={openCreate}
@@ -174,6 +188,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
           onOpenService={openService}
           onOpenReviews={() => setReviewsOpen(true)}
           onOpenAdmin={() => setAdminOpen(true)}
+          headerAction={notificationBell}
         />
       )}
 
@@ -181,11 +196,6 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
         active={tab}
         onChange={setTab}
         activityCount={incoming.filter((r) => r.status === "pending").length}
-        unreadCount={notifications.unread}
-        onOpenNotifications={() => {
-          setInboxOpen(true);
-          void notifications.load().then(() => notifications.markAllSeen());
-        }}
       />
 
       <NotificationInbox

@@ -18,11 +18,13 @@ export function HomeScreen({
   onOpenCategory,
   onCreate,
   onSeeAll,
+  headerAction,
 }: {
   onOpenService: (s: Service) => void;
   onOpenCategory: (c: CategoryId) => void;
   onCreate: () => void;
   onSeeAll: () => void;
+  headerAction?: React.ReactNode;
 }) {
   const { allServices, username, hasMore, loadMoreServices, ready } = useServices();
 
@@ -38,13 +40,16 @@ export function HomeScreen({
     <div className="mx-auto max-w-md pb-24">
       {/* hero */}
       <div className="ps-hero-grad px-4 pb-5 pt-4 ps-safe-top">
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <IconLogo size={20} />
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <IconLogo size={20} />
+            </div>
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold leading-tight text-foreground">{APP_NAME}</h1>
+            </div>
           </div>
-          <div className="min-w-0">
-            <h1 className="text-lg font-bold leading-tight text-foreground">{APP_NAME}</h1>
-          </div>
+          {headerAction}
         </div>
         <p className="mt-3 text-sm text-muted-foreground">Hi {username} 👋</p>
         <h2 className="mt-1 text-2xl font-bold leading-tight text-foreground text-balance">
