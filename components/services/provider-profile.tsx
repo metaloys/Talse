@@ -14,6 +14,7 @@ import { Avatar, Card, EmptyState, Pill } from "./ui";
 import { IconCalendar, IconFlag, IconInbox, IconPin, IconStar } from "./icons";
 import { ServiceRow } from "./service-card";
 import { ReportSheet } from "./report-sheet";
+import { ShareButton } from "./share-button";
 
 function renderSuccessRate(jobsCompleted: number, refunds: number) {
   const total = jobsCompleted + refunds;
@@ -45,12 +46,36 @@ export function ProviderProfile({
   onClose: () => void;
   onOpenService: (service: Service) => void;
 }) {
-  const { getProvider, servicesByProvider } = useServices();
+  const { getProvider, servicesByProvider, ensureProvider } = useServices();
 
   const provider = providerId ? getProvider(providerId) : undefined;
   const services = providerId ? servicesByProvider(providerId) : [];
   const [reviews, setReviews] = useState<any[] | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
+  // A provider opened from a shared link may not be in the loaded catalogue
+  // yet, so load them (and their listings) on demand instead of flashing
+  // "Provider not found".
+  const [loadingProvider, setLoadingProvider] = useState(false);
+  const [providerMissing, setProviderMissing] = useState(false);
+
+  useEffect(() => {
+    if (!open || !providerId) {
+      setLoadingProvider(false);
+      setProviderMissing(false);
+      return;
+    }
+    let cancelled = false;
+    if (!provider) setLoadingProvider(true);
+    void ensureProvider(providerId).then((loaded) => {
+      if (cancelled) return;
+      setLoadingProvider(false);
+      setProviderMissing(!loaded);
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, providerId]);
 
   useEffect(() => {
     let mounted = true;
@@ -81,14 +106,19 @@ export function ProviderProfile({
     <Overlay open={open} onClose={onClose} title="Provider">
       {!provider ? (
         <div className="mx-auto max-w-md p-4">
-          <EmptyState title="Provider not found" message="This provider is no longer available." />
+          {loadingProvider || !providerMissing ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">Loading provider…</p>
+          ) : (
+            <EmptyState title="Provider not found" message="This provider is no longer available." />
+          )}
         </div>
       ) : (
         <div className="mx-auto max-w-md space-y-4 p-4 pb-10">
           <div className="ps-hero-grad rounded-2xl border border-border p-5">
-            <div className="flex items-center gap-3">
-              <Avatar name={provider.name} hue={hueFromString(provider.name)} size={60} />
-              <div className="min-w-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <Avatar name={provider.name} hue={hueFromString(provider.name)} size={60} />
+                <div className="min-w-0">
                 <h1 className="text-lg font-bold text-foreground">{provider.name}</h1>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   {provider.isMe && <Pill tone="accent">You</Pill>}
@@ -112,7 +142,15 @@ export function ProviderProfile({
                 {(provider.totalEarned ?? 0) >= 100 && (
                   <div className="mt-2">{renderEarningsBadge(provider.totalEarned ?? 0)}</div>
                 )}
+                </div>
               </div>
+              <ShareButton
+                iconOnly
+                label="Share this provider"
+                title={`${provider.name} · Talse`}
+                text={`${provider.name} is on Talse — hire them with Pi.`}
+                path={`/providers/${provider.id}`}
+              />
             </div>
             {provider.location && (
               <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground">

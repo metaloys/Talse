@@ -19,6 +19,7 @@ import { useServices } from "@/contexts/services-context";
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { ConfirmSheet } from "./feedback";
 import { Avatar, Button, Card, cx, EmptyState, Field, Pill, TextArea, TextInput, Toggle } from "./ui";
+import { ShareButton } from "./share-button";
 import {
   CategoryIcon,
   IconCalendar,
@@ -44,7 +45,7 @@ export function ProfileScreen({
   onOpenAdmin: () => void;
   headerAction?: React.ReactNode;
 }) {
-  const { profile, username, myListings, saveProfile, toggleServiceActive, deleteService } = useServices();
+  const { profile, username, myListings, saveProfile, toggleServiceActive, deleteService, currentUid } = useServices();
   const { accessToken, logout } = usePiAuth();
 
   const [editing, setEditing] = useState(false);
@@ -144,6 +145,13 @@ export function ProfileScreen({
           {!editing && (
             <div className="flex shrink-0 items-center gap-2">
               {headerAction}
+              <ShareButton
+                iconOnly
+                label="Share my profile"
+                title={`${displayName} · Talse`}
+                text={`Find me on Talse — hire Pi builders with Pi.`}
+                path={currentUid ? `/providers/${currentUid}` : "/"}
+              />
               <button
                 onClick={startEdit}
                 aria-label="Edit profile"

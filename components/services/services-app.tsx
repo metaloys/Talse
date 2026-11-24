@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { CategoryId, Service, TabId } from "@/lib/services/data";
 import { ServicesProvider, useServices } from "@/contexts/services-context";
@@ -28,8 +28,18 @@ const ReviewsScreen = dynamic(() => import("./reviews-screen").then((m) => m.Rev
 const AdminPanel = dynamic(() => import("./admin-panel").then((m) => m.AdminPanel), { ssr: false });
 const DisputeResolution = dynamic(() => import("./dispute-resolution").then((m) => m.DisputeResolution), { ssr: false });
 
-function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request"; id: string } | null }) {
-  const { ready, storageTrouble, toasts, dismissToast, incoming, getService } = useServices();
+/**
+ * Entry links the app can be opened with. `/services/[id]` and `/providers/[id]`
+ * are the share targets Batch 2 introduces; `/hire-requests/[id]` already
+ * existed for notifications.
+ */
+export type AppDeepLink =
+  | { type: "hire-request"; id: string }
+  | { type: "service"; id: string }
+  | { type: "provider"; id: string };
+
+function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null }) {
+  const { ready, storageTrouble, toasts, dismissToast, incoming, getService, pushToast, ensureService } = useServices();
 
   const [tab, setTab] = useState<TabId>("home");
 
@@ -74,10 +84,6 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
     if (ready) trackAppOpen();
   }, [ready]);
 
-  if (!ready) return <LoadingScreen />;
-  if (adminOpen) return <AdminPanel onExit={() => setAdminOpen(false)} />;
-  if (disputesOpen) return <DisputeResolution onClose={() => { setDisputesOpen(false); setDisputeRequestId(null); }} requestId={disputeRequestId ?? undefined} />;
-
   const openService = (s: Service) => {
     track("service_view", {
       service_id: s.id,
@@ -89,6 +95,49 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
     setDetailService(s);
     setDetailOpen(true);
   };
+
+  // Shared-listing and shared-profile links. Unlike the hire-request link these
+  // need the catalogue/auth layer to be ready, so they resolve once `ready`
+  // flips. The ref keeps a re-render from re-opening the overlay.
+  const handledDeepLink = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialDeepLink || !ready) return;
+    if (initialDeepLink.type === "hire-request") return;
+
+    const key = `${initialDeepLink.type}:${initialDeepLink.id}`;
+    if (handledDeepLink.current === key) return;
+    handledDeepLink.current = key;
+
+    let cancelled = false;
+    // Consume the share URL so closing the overlay doesn't leave the app on a
+    // deep-link path that reopens on the next reload.
+    const clearDeepLinkUrl = () => {
+      if (typeof window === "undefined") return;
+      if (window.location.pathname !== "/") window.history.replaceState(null, "", "/");
+    };
+
+    if (initialDeepLink.type === "service") {
+      void ensureService(initialDeepLink.id).then((svc) => {
+        if (cancelled) return;
+        clearDeepLinkUrl();
+        if (svc) openService(svc);
+        else pushToast("That listing is no longer available.", "warning");
+      });
+    } else {
+      setProviderId(initialDeepLink.id);
+      setProviderOpen(true);
+      clearDeepLinkUrl();
+    }
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialDeepLink, ready]);
+
+  if (!ready) return <LoadingScreen />;
+  if (adminOpen) return <AdminPanel onExit={() => setAdminOpen(false)} />;
+  if (disputesOpen) return <DisputeResolution onClose={() => { setDisputesOpen(false); setDisputeRequestId(null); }} requestId={disputeRequestId ?? undefined} />;
 
   const openCategory = (c: CategoryId) => {
     setPresetCategory(c);
@@ -134,8 +183,10 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
     }
     const svc = subroute.match(/^\/services\/([^/?#]+)/);
     if (svc) {
-      const found = getService(svc[1]);
-      if (found) openService(found);
+      void ensureService(svc[1]).then((found) => {
+        if (found) openService(found);
+        else pushToast("That listing is no longer available.", "warning");
+      });
     }
   };
 
@@ -268,7 +319,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
   );
 }
 
-export function ServicesApp({ initialDeepLink }: { initialDeepLink?: { type: "hire-request"; id: string } | null } = {}) {
+export function ServicesApp({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null } = {}) {
   return (
     <ServicesProvider>
       <AppInner initialDeepLink={initialDeepLink} />

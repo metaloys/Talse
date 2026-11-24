@@ -240,6 +240,16 @@ export function IconBell(p: IconProps) {
   );
 }
 
+export function IconShare(p: IconProps) {
+  return (
+    <svg {...base(p)}>
+      <path d="M12 15V3" />
+      <path d="m8 7 4-4 4 4" />
+      <path d="M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6" />
+    </svg>
+  );
+}
+
 export function IconPaperclip(p: IconProps) {
   return (
     <svg {...base(p)}>

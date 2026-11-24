@@ -26,6 +26,7 @@ import {
 import { hueFromString } from "@/lib/services/data";
 import { BoostListing } from "./boost-listing";
 import { ReportSheet } from "./report-sheet";
+import { ShareButton } from "./share-button";
 
 export function ServiceDetail({
   service,
@@ -97,6 +98,15 @@ export function ServiceDetail({
             alt=""
             className="h-full w-full object-cover"
           />
+          <div className="absolute right-3 top-3">
+            <ShareButton
+              iconOnly
+              label="Share this service"
+              title={`${service.title} · Talse`}
+              text={`${service.title} — ${formatPi(service.price)} on Talse.`}
+              path={`/services/${service.id}`}
+            />
+          </div>
           {images.length > 1 && (
             <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5">
               {images.map((_, i) => (
@@ -203,13 +213,24 @@ export function ServiceDetail({
             </p>
           </Card>
 
-          <button
-            onClick={() => setReportOpen(true)}
-            className="ps-press flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
-          >
-            <IconFlag size={14} />
-            Report this listing
-          </button>
+          <div className="flex items-center justify-between gap-2">
+            <button
+              onClick={() => setReportOpen(true)}
+              className="ps-press flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
+            >
+              <IconFlag size={14} />
+              Report this listing
+            </button>
+            <ShareButton
+              variant="ghost"
+              size="sm"
+              label="Share"
+              className="h-8 px-2 text-xs text-muted-foreground"
+              title={`${service.title} · Talse`}
+              text={`${service.title} — ${formatPi(service.price)} on Talse.`}
+              path={`/services/${service.id}`}
+            />
+          </div>
 
           <p className="pt-1 text-[11px] leading-relaxed text-muted-foreground">{DISCLAIMER}</p>
         </div>

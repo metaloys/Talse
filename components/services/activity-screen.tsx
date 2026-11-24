@@ -9,6 +9,7 @@ import { Button, Card, cx, EmptyState, Pill, TextArea } from "./ui";
 import { EscrowActions } from "./escrow-actions";
 import { Overlay } from "./feedback";
 import { RequestTimeline } from "./request-timeline";
+import { ShareButton } from "./share-button";
 import { IconStar } from "./icons";
 
 export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages, onViewDispute, headerAction }: { onBrowse: () => void; initialOpenRequestId?: string | null; onOpenMessages?: (requestId: string) => void; onViewDispute?: (requestId: string) => void; headerAction?: React.ReactNode }) {
@@ -296,15 +297,28 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
           </div>
         )}
 
-        {status === "released" && req.direction === "outgoing" && (
-          <div className="mt-3">
-            <Button
-              size="sm"
+        {status === "released" && (
+          <div className="mt-3 space-y-2">
+            {req.direction === "outgoing" && (
+              <Button
+                size="sm"
+                className="w-full"
+                onClick={() => setReviewPromptFor(req)}
+              >
+                Leave review
+              </Button>
+            )}
+            <ShareButton
               className="w-full"
-              onClick={() => setReviewPromptFor(req)}
-            >
-              Leave review
-            </Button>
+              label="Share receipt"
+              title={`${req.serviceTitle} · Talse`}
+              text={
+                req.direction === "outgoing"
+                  ? `I hired "${req.serviceTitle}" on Talse for ${formatPi(req.servicePrice)} — escrow released.`
+                  : `I delivered "${req.serviceTitle}" on Talse for ${formatPi(req.servicePrice)}.`
+              }
+              path={`/services/${req.serviceId}`}
+            />
           </div>
         )}
 

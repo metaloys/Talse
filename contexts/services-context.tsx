@@ -234,6 +234,7 @@ interface ServicesContextType {
   myListings: Service[];
   allServices: Service[];
   getService: (id: string) => Service | undefined;
+  ensureService: (id: string) => Promise<Service | null>;
   addService: (input: NewServiceInput) => Promise<Service>;
   updateService: (id: string, input: NewServiceInput) => Promise<void>;
   toggleServiceActive: (id: string) => Promise<void>;
@@ -244,6 +245,7 @@ interface ServicesContextType {
   loadedPages: number;
 
   getProvider: (id: string) => PublicProvider | undefined;
+  ensureProvider: (id: string) => Promise<PublicProvider | null>;
   servicesByProvider: (id: string) => Service[];
 
   requests: HireRequest[];
@@ -288,6 +290,10 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile>(DEFAULT_PROFILE);
 
   const [listings, setListings] = useState<Service[]>([]);
+  // Providers fetched on demand by a /providers/[id] deep link, so a shared
+  // profile renders even when none of that provider's listings happen to be in
+  // the loaded catalogue pages.
+  const [providerCache, setProviderCache] = useState<Record<string, PublicProvider>>({});
   const [requests, setRequests] = useState<HireRequest[]>([]);
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
 
@@ -918,6 +924,29 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
     return service.active || isOwner ? service : undefined;
   };
 
+  /**
+   * Resolve a listing by id, fetching it if the catalogue pages loaded so far
+   * don't include it. Used by the /services/[id] share deep link.
+   */
+  const ensureService = async (id: string): Promise<Service | null> => {
+    const cached = getService(id);
+    if (cached) return cached;
+    if (!id) return null;
+    try {
+      const { service } = await backendApi.services.get(id);
+      if (!service) return null;
+      const mapped = mapBackendService(service);
+      setListings((prev) => {
+        const exists = prev.some((s) => s.id === mapped.id);
+        return exists ? prev.map((s) => (s.id === mapped.id ? mapped : s)) : [mapped, ...prev];
+      });
+      const isOwner = mapped.ownerId === currentUid;
+      return mapped.active || isOwner ? mapped : null;
+    } catch {
+      return null;
+    }
+  };
+
   const getProvider = (id: string): PublicProvider | undefined => {
     const p = profileRef.current;
     if (id === currentUid) {
@@ -935,6 +964,8 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
             totalEarned: p.totalEarned ?? 0,
       };
     }
+    const cached = providerCache[id];
+    if (cached) return cached;
     const service = listings.find((item) => item.ownerId === id && item.active);
     return service
       ? {
@@ -951,6 +982,65 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
           totalEarned: 0,
         }
       : undefined;
+  };
+
+  /**
+   * Load a provider from the public API on demand, merging their listings so
+   * the profile shows services and real bio/ratings even on a cold visit from
+   * a shared /providers/[id] link.
+   */
+  const ensureProvider = async (id: string): Promise<PublicProvider | null> => {
+    if (!id) return null;
+    // A cached full profile (or the caller's own) is enough. A provider seen
+    // only through one of their listings is a stub with no bio/ratings, so it
+    // still gets fetched once to fill the profile screen in.
+    const cached = providerCache[id];
+    if (cached) return cached;
+    if (id === currentUid) return getProvider(id) ?? null;
+    try {
+      // One public endpoint (app/api/providers/[id]) returns the profile and
+      // active listings. `/api/services?owner=` deliberately rejects other
+      // users' uids, so it can't be used for a shared-profile visit.
+      const res = await fetch(`/api/providers/${encodeURIComponent(id)}`);
+      if (!res.ok) return null;
+      const payload = (await res.json()) as {
+        provider:
+          | (Omit<PublicProvider, "isMe" | "id"> & { id: string })
+          | null;
+        services: any[];
+      };
+
+      const fetched = (payload.services ?? []).map(mapBackendService);
+      if (fetched.length > 0) {
+        setListings((prev) => {
+          const byId = new Map(prev.map((s) => [s.id, s] as const));
+          for (const s of fetched) byId.set(s.id, s);
+          return Array.from(byId.values());
+        });
+      }
+
+      const profileRow = payload.provider;
+      const anchor = fetched.find((s) => s.active) ?? fetched[0];
+      if (!profileRow && !anchor) return null;
+
+      const provider: PublicProvider = {
+        id,
+        name: profileRow?.name || anchor?.ownerName || "Provider",
+        bio: profileRow?.bio ?? "",
+        location: profileRow?.location ?? "",
+        joinedAt: profileRow?.joinedAt || anchor?.createdAt || Date.now(),
+        isMe: id === currentUid,
+        ratingAvg: profileRow?.ratingAvg ?? anchor?.ratingAvg ?? 0,
+        ratingCount: profileRow?.ratingCount ?? anchor?.ratingCount ?? 0,
+        jobsCompleted: profileRow?.jobsCompleted ?? 0,
+        refundsAgainstProvider: profileRow?.refundsAgainstProvider ?? 0,
+        totalEarned: profileRow?.totalEarned ?? 0,
+      };
+      setProviderCache((prev) => ({ ...prev, [id]: provider }));
+      return provider;
+    } catch {
+      return null;
+    }
   };
 
   const servicesByProvider = (id: string): Service[] =>
@@ -970,6 +1060,7 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
     myListings,
     allServices,
     getService,
+    ensureService,
     addService,
     updateService,
     toggleServiceActive,
@@ -979,6 +1070,7 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
     hasMore,
     loadedPages,
     getProvider,
+    ensureProvider,
     servicesByProvider,
     requests,
     outgoing,

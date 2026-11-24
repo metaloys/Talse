@@ -98,6 +98,11 @@ declare global {
       ) => Promise<PiAuthenticateResult>;
       createPayment: (data: PiPaymentData, callbacks: PiPaymentCallbacks) => void;
       currentUser?: { username: string } | null;
+      // Native sharing/clipboard utilities. Optional because older Pi Browser
+      // builds only ship the core auth + payment surface; lib/pi-native.ts falls
+      // back to the Web Share API and the clipboard when they are absent.
+      openShareDialog?: (title: string, message: string) => void | Promise<void>;
+      copyText?: (text: string) => void | Promise<void>;
     };
   }
 }
