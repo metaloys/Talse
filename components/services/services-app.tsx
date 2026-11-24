@@ -1,24 +1,30 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import type { CategoryId, Service, TabId } from "@/lib/services/data";
 import { ServicesProvider, useServices } from "@/contexts/services-context";
-import { LoadingScreen, StorageNotice, ToastHost } from "./feedback";
+import { LoadingScreen, Overlay, StorageNotice, ToastHost } from "./feedback";
 import { BottomNav } from "./bottom-nav";
 import { HomeScreen } from "./home-screen";
-import { SearchScreen } from "./search-screen";
-import { MessagesScreen } from "./messages-screen";
-import { ActivityScreen } from "./activity-screen";
-import { ProfileScreen } from "./profile-screen";
-import { ReviewsScreen } from "./reviews-screen";
-import { ServiceDetail } from "./service-detail";
-import { HireForm } from "./hire-form";
-import { CreateService } from "./create-service";
-import { ProviderProfile } from "./provider-profile";
-import { AdminPanel } from "./admin-panel";
-import { DisputeResolution } from "./dispute-resolution";
-import { Overlay } from "./feedback";
 import { track, trackAppOpen } from "@/lib/analytics";
+
+// Everything below is behind a user action or a tab switch, so it is code-split
+// out of the first-load bundle. The app boots on the Home tab only; shipping
+// the admin panel, dispute tools and every other screen up front was pure
+// start-up cost. `ssr: false` is safe here because the server renders only
+// LoadingScreen (the app is gated on `ready`, which is false during SSR).
+const SearchScreen = dynamic(() => import("./search-screen").then((m) => m.SearchScreen), { ssr: false });
+const ActivityScreen = dynamic(() => import("./activity-screen").then((m) => m.ActivityScreen), { ssr: false });
+const MessagesScreen = dynamic(() => import("./messages-screen").then((m) => m.MessagesScreen), { ssr: false });
+const ProfileScreen = dynamic(() => import("./profile-screen").then((m) => m.ProfileScreen), { ssr: false });
+const ServiceDetail = dynamic(() => import("./service-detail").then((m) => m.ServiceDetail), { ssr: false });
+const HireForm = dynamic(() => import("./hire-form").then((m) => m.HireForm), { ssr: false });
+const CreateService = dynamic(() => import("./create-service").then((m) => m.CreateService), { ssr: false });
+const ProviderProfile = dynamic(() => import("./provider-profile").then((m) => m.ProviderProfile), { ssr: false });
+const ReviewsScreen = dynamic(() => import("./reviews-screen").then((m) => m.ReviewsScreen), { ssr: false });
+const AdminPanel = dynamic(() => import("./admin-panel").then((m) => m.AdminPanel), { ssr: false });
+const DisputeResolution = dynamic(() => import("./dispute-resolution").then((m) => m.DisputeResolution), { ssr: false });
 
 function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request"; id: string } | null }) {
   const { ready, storageTrouble, toasts, dismissToast, incoming, getService } = useServices();
@@ -157,38 +163,45 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
         activityCount={incoming.filter((r) => r.status === "pending").length}
       />
 
-      {/* overlays */}
-      <ServiceDetail
-        service={detailService}
-        open={detailOpen}
-        onClose={() => setDetailOpen(false)}
-        onHire={openHire}
-        onOpenProvider={(id) => {
-          setDetailOpen(false);
-          openProvider(id);
-        }}
-      />
+      {/* overlays — mounted only while open, so their code is fetched on
+          first use rather than shipped with the first screen */}
+      {detailOpen && (
+        <ServiceDetail
+          service={detailService}
+          open={detailOpen}
+          onClose={() => setDetailOpen(false)}
+          onHire={openHire}
+          onOpenProvider={(id) => {
+            setDetailOpen(false);
+            openProvider(id);
+          }}
+        />
+      )}
 
-      <HireForm
-        service={hireService}
-        open={hireOpen}
-        onClose={() => setHireOpen(false)}
-        onSent={() => {
-          setHireOpen(false);
-          setTab("activity");
-        }}
-      />
+      {hireOpen && (
+        <HireForm
+          service={hireService}
+          open={hireOpen}
+          onClose={() => setHireOpen(false)}
+          onSent={() => {
+            setHireOpen(false);
+            setTab("activity");
+          }}
+        />
+      )}
 
-      <CreateService
-        open={createOpen}
-        editing={editing}
-        onClose={() => setCreateOpen(false)}
-        onSaved={(svc) => {
-          setCreateOpen(false);
-          if (svc) openService(svc);
-          else setTab("profile");
-        }}
-      />
+      {createOpen && (
+        <CreateService
+          open={createOpen}
+          editing={editing}
+          onClose={() => setCreateOpen(false)}
+          onSaved={(svc) => {
+            setCreateOpen(false);
+            if (svc) openService(svc);
+            else setTab("profile");
+          }}
+        />
+      )}
 
       <Overlay open={reviewsOpen} onClose={() => setReviewsOpen(false)} title="My reviews">
         <div className="mx-auto max-w-md p-4 pb-10">
@@ -196,17 +209,19 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: { type: "hire-request
         </div>
       </Overlay>
 
-      <ProviderProfile
-        providerId={providerId}
-        open={providerOpen}
-        onClose={() => setProviderOpen(false)}
-        onOpenService={(s) => {
-          // if opening a service from a provider that isn't loaded in detail state
-          const fresh = getService(s.id) ?? s;
-          setProviderOpen(false);
-          openService(fresh);
-        }}
-      />
+      {providerOpen && (
+        <ProviderProfile
+          providerId={providerId}
+          open={providerOpen}
+          onClose={() => setProviderOpen(false)}
+          onOpenService={(s) => {
+            // if opening a service from a provider that isn't loaded in detail state
+            const fresh = getService(s.id) ?? s;
+            setProviderOpen(false);
+            openService(fresh);
+          }}
+        />
+      )}
     </div>
   );
 }
