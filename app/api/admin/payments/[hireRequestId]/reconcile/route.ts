@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
-import { requireAdmin, NotAdminError } from "@/lib/admin";
+import { authorizeAdmin, adminError } from "@/lib/admin-route";
 import { reconcileStalePayoutLock } from "@/lib/dispute-resolution";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ hireRequestId: string }> }) {
   try {
-    const me = await verifyPiToken(req.headers.get("authorization"));
-    requireAdmin(me.uid);
+    await authorizeAdmin(req, "escrow");
     const { hireRequestId } = await params;
     const body = await req.json().catch(() => ({}));
     const favor = body?.favor === "buyer" ? "buyer" : "provider";
@@ -19,8 +17,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ hir
 
     return NextResponse.json({ ok: true, action: outcome.action, request: outcome.request });
   } catch (err) {
-    if (err instanceof NotAdminError) return NextResponse.json({ error: err.message }, { status: err.status });
-    if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    return NextResponse.json({ error: err instanceof Error ? err.message : "Internal error" }, { status: 500 });
+    return adminError(err, "reconcile");
   }
 }

@@ -1,14 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
-import { requireAdmin, NotAdminError } from "@/lib/admin";
-import { writeAudit } from "@/lib/admin-route";
+import { authorizeAdmin, adminError, writeAudit } from "@/lib/admin-route";
 
-// PATCH /api/admin/categories/:id - edit category (admin only)
+// PATCH /api/admin/categories/:id — edit a category (role-aware, audited).
 export async function PATCH(req: NextRequest) {
   try {
-    const me = await verifyPiToken(req.headers.get("authorization"));
-    requireAdmin(me.uid);
+    const access = await authorizeAdmin(req, "categories");
+
     const url = new URL(req.url);
     const id = url.pathname.split("/").pop();
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -25,11 +23,10 @@ export async function PATCH(req: NextRequest) {
     const { data: before } = await supabaseAdmin.from("categories").select("*").eq("id", id).maybeSingle();
     const { data, error } = await supabaseAdmin.from("categories").update(allowed).eq("id", id).select("*").single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    await writeAudit({ adminUid: me.uid, action: "category.update", targetType: "category", targetId: id, previousState: before, newState: allowed });
+
+    await writeAudit({ adminUid: access.uid, action: "category.update", targetType: "category", targetId: id, previousState: before, newState: allowed });
     return NextResponse.json({ category: data });
   } catch (err) {
-    if (err instanceof NotAdminError) return NextResponse.json({ error: err.message }, { status: err.status });
-    if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return adminError(err, "category-update");
   }
 }

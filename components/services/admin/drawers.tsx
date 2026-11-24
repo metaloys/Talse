@@ -269,6 +269,9 @@ export function UserDrawer({ uid, onClose, ctx }: { uid: string | null; onClose:
   };
 
   const isSuspended = Boolean(p?.suspended_at);
+  // Suspending/restoring is moderation: owner or ops only, matching the server
+  // gate on PATCH /api/admin/users/[id] (section "trust").
+  const canModerate = ["owner", "ops"].includes(ctx.role);
 
   return (
     <>
@@ -278,11 +281,14 @@ export function UserDrawer({ uid, onClose, ctx }: { uid: string | null; onClose:
         title={p ? p.display_name || p.username || shortId(p.pi_uid) : "User"}
         subtitle={p ? <span className="font-mono">{p.pi_uid}</span> : undefined}
         footer={
-          p && (
+          p &&
+          (canModerate ? (
             <Button size="sm" variant={isSuspended ? "success" : "danger"} onClick={() => setConfirm({ suspend: !isSuspended })}>
               {isSuspended ? "Restore account" : "Suspend account"}
             </Button>
-          )
+          ) : (
+            <span className="text-xs text-muted-foreground">Suspending accounts requires owner or ops access.</span>
+          ))
         }
       >
         {loading && <div className="h-24 animate-pulse rounded-lg bg-secondary/60" />}

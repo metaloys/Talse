@@ -1,13 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
-import { requireAdmin, NotAdminError } from "@/lib/admin";
+import { authorizeAdmin, adminError } from "@/lib/admin-route";
 
 // GET /api/admin/reports?page=1&perPage=20&status=open
 export async function GET(req: NextRequest) {
   try {
-    const me = await verifyPiToken(req.headers.get("authorization"));
-    requireAdmin(me.uid);
+    await authorizeAdmin(req, "reports");
 
     const url = new URL(req.url);
     const page = Number(url.searchParams.get("page") ?? "1");
@@ -29,8 +27,6 @@ export async function GET(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     return NextResponse.json({ reports: data ?? [], count: count ?? undefined });
   } catch (err) {
-    if (err instanceof NotAdminError) return NextResponse.json({ error: err.message }, { status: err.status });
-    if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return adminError(err, "reports");
   }
 }

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
-import { requireAdmin, NotAdminError } from "@/lib/admin";
+import { authorizeAdmin, adminError } from "@/lib/admin-route";
 
 // GET /api/admin/dashboard
 //
@@ -15,8 +14,7 @@ import { requireAdmin, NotAdminError } from "@/lib/admin";
 //                 suspended-but-listed providers, stale payout locks
 export async function GET(req: NextRequest) {
   try {
-    const me = await verifyPiToken(req.headers.get("authorization"));
-    requireAdmin(me.uid);
+    await authorizeAdmin(req, "overview");
 
     const now = Date.now();
     const day30 = new Date(now - 30 * 24 * 60 * 60 * 1000);
@@ -144,9 +142,6 @@ export async function GET(req: NextRequest) {
       generatedAt: new Date().toISOString(),
     });
   } catch (err) {
-    if (err instanceof NotAdminError) return NextResponse.json({ error: err.message }, { status: err.status });
-    if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    console.error("[admin:dashboard] failed:", err instanceof Error ? err.message : err);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return adminError(err, "dashboard");
   }
 }

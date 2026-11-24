@@ -71,7 +71,7 @@ export function UsersScreen({ ctx }: { ctx: ScreenCtx }) {
         onRowClick={(r: any) => ctx.openUser(r.pi_uid)}
         emptyTitle="No users"
       />
-      <Pagination page={page} perPage={25} count={(data?.users?.length ?? 0) >= 25 ? page * 25 + 1 : (page - 1) * 25 + (data?.users?.length ?? 0)} onPage={setPage} />
+      <Pagination page={page} perPage={25} count={data?.count ?? (data?.users?.length ?? 0)} onPage={setPage} />
     </div>
   );
 }

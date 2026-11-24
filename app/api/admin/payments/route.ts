@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
-import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
-import { requireAdmin, NotAdminError } from "@/lib/admin";
+import { authorizeAdmin, adminError } from "@/lib/admin-route";
 
 export async function GET(req: NextRequest) {
   try {
-    const me = await verifyPiToken(req.headers.get("authorization"));
-    requireAdmin(me.uid);
+    await authorizeAdmin(req, "payments");
 
     // hire_requests with release_txid or refund_txid, plus boost_purchases
     const [hrRes, boostRes] = await Promise.all([
@@ -42,8 +40,6 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({ payments: merged });
   } catch (err) {
-    if (err instanceof NotAdminError) return NextResponse.json({ error: err.message }, { status: err.status });
-    if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    return adminError(err, "payments");
   }
 }

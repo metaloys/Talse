@@ -167,7 +167,7 @@ export const backendApi = {
       request<{ counts: any; earnings?: any; escrow?: any; series?: any[]; needsAttention?: any; generatedAt?: string }>(`/api/admin/dashboard`, { accessToken }),
     listUsers: (params?: { search?: string; page?: number; perPage?: number; filter?: string }, accessToken?: string) => {
       const qs = toQuery(params as AdminQuery | undefined);
-      return request<{ users: any[]; page?: number; perPage?: number }>(`/api/admin/users${qs}`, { accessToken });
+      return request<{ users: any[]; count?: number; page?: number; perPage?: number }>(`/api/admin/users${qs}`, { accessToken });
     },
     listServices: (params?: { search?: string }, accessToken?: string) => {
       const qs = params ? new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))).toString() : "";
@@ -234,9 +234,9 @@ export const backendApi = {
         `/api/admin/listings${qs}`, { accessToken });
     },
     setServiceActive: (id: string, active: boolean, reason: string, accessToken: string) =>
-      request<{ active: boolean; auditLogged: boolean; serviceId: string }>(`/api/admin/services/${id}`, { method: "PATCH", body: { active, reason }, accessToken }),
+      request<{ active: boolean; serviceId: string }>(`/api/admin/services/${id}`, { method: "PATCH", body: { active, reason }, accessToken }),
     setReviewHidden: (id: string, hidden: boolean, reason: string, accessToken: string) =>
-      request<{ reviewId: string; hidden: boolean; auditLogged: boolean }>(`/api/admin/reviews/${id}`, { method: "PATCH", body: { hidden, reason }, accessToken }),
+      request<{ reviewId: string; hidden: boolean }>(`/api/admin/reviews/${id}`, { method: "PATCH", body: { hidden, reason }, accessToken }),
     listConversations: (params: AdminQuery | undefined, accessToken: string) => {
       const qs = toQuery(params);
       return request<{ conversations: any[]; count: number; page: number; perPage: number }>(`/api/admin/conversations${qs}`, { accessToken });
@@ -268,7 +268,7 @@ export const backendApi = {
         `/api/admin/health`, { accessToken }),
     /** Suspends or restores a user account (PATCH /api/admin/users/[id]). */
     setUserSuspended: (id: string, suspended: boolean, reason: string, accessToken: string) =>
-      request<{ userId: string; suspended: boolean; auditLogged: boolean }>(`/api/admin/users/${id}`, {
+      request<{ userId: string; suspended: boolean }>(`/api/admin/users/${id}`, {
         method: "PATCH",
         body: { suspended, reason },
         accessToken,
