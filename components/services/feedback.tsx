@@ -1,6 +1,6 @@
 "use client";
 
-import React, { type ReactNode, useEffect } from "react";
+import React, { type ReactNode, useEffect, useState } from "react";
 import { APP_NAME, type Toast } from "@/lib/services/data";
 import { cx, IconButton } from "./ui";
 import {
@@ -26,13 +26,32 @@ export function LoadingScreen() {
   );
 }
 
+/**
+ * Shown only when a profile *write* actually failed (KeyWriter.onTrouble).
+ * Load failures use a normal toast instead, because claiming "your data is
+ * safe" during a failed fetch is what made this banner look like a permanent
+ * lie. It also auto-hides: if a write keeps failing the retry will surface it
+ * again, but a single hiccup must not pin a banner to the top of the app.
+ */
 export function StorageNotice({ show }: { show: boolean }) {
-  if (!show) return null;
+  const [visible, setVisible] = useState(show);
+
+  useEffect(() => {
+    if (!show) {
+      setVisible(false);
+      return;
+    }
+    setVisible(true);
+    const timer = setTimeout(() => setVisible(false), 12000);
+    return () => clearTimeout(timer);
+  }, [show]);
+
+  if (!visible) return null;
   return (
     <div className="fixed inset-x-0 top-0 z-[70] flex justify-center px-4 ps-safe-top pointer-events-none">
       <div className="ps-anim-toast-in mt-2 flex items-center gap-2 rounded-full bg-warning-soft px-3.5 py-2 text-xs font-medium text-warning-foreground shadow-sm">
         <IconShield size={15} />
-        Saving again — your data is safe.
+        Couldn&apos;t save just now — retrying. Your data is safe.
       </div>
     </div>
   );

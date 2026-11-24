@@ -43,7 +43,7 @@ export const backendApi = {
       return request<{ services: any[] } | { services: any[]; page: number; perPage: number; total: number; hasMore: boolean }>(`/api/services${qs ? `?${qs}` : ""}`);
     },
     get: (id: string) => request<{ service: any }>(`/api/services/${id}`),
-    create: (body: { title: string; category: string; description: string; price: number; deliveryId: string; images?: string[] }, accessToken: string) =>
+    create: (body: { title: string; category: string; description: string; price: number; deliveryId: string; images?: string[]; coverImage?: string }, accessToken: string) =>
       request<{ service: any }>(`/api/services`, { method: "POST", body, accessToken }),
     update: (id: string, body: Record<string, unknown>, accessToken: string) =>
       request<{ service: any }>(`/api/services/${id}`, { method: "PATCH", body, accessToken }),

@@ -15,7 +15,8 @@ import {
   type Service,
 } from "@/lib/services/data";
 import { useServices } from "@/contexts/services-context";
-import { compressImageFile, ACCEPTED_IMAGE_TYPES } from "@/lib/image-compress";
+import { backendApi } from "@/lib/backend-api";
+import { compressImageFile, makeCoverFromDataUrl, ACCEPTED_IMAGE_TYPES } from "@/lib/image-compress";
 import { track } from "@/lib/analytics";
 import { Overlay } from "./feedback";
 import { Button, Card, cx, Field, IconButton, Select, TextArea, TextInput } from "./ui";
@@ -60,6 +61,18 @@ export function CreateService({
       setPrice(String(editing.price));
       setDeliveryId(editing.deliveryId);
       setImages(editing.images.slice(0, MAX_IMAGES));
+      // Catalogue rows carry only a cover thumbnail, so the real gallery is
+      // fetched here. Without this, editing a listing would show no images and
+      // saving would overwrite the stored ones with an empty array.
+      void backendApi.services
+        .get(editing.id)
+        .then((res) => {
+          const imgs = res?.service?.images;
+          if (Array.isArray(imgs)) setImages(imgs.slice(0, MAX_IMAGES));
+        })
+        .catch(() => {
+          // Keep whatever we already have; the owner can still edit text.
+        });
     } else {
       setTitle("");
       setCategory("design");
@@ -121,6 +134,7 @@ export function CreateService({
       price: priceValue,
       deliveryId,
       images,
+      coverImage: images[0] ? (await makeCoverFromDataUrl(images[0])) ?? undefined : undefined,
     };
     setSaving(true);
     try {

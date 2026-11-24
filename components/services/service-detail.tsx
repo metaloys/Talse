@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   APP_NAME,
   CATEGORY_MAP,
@@ -12,6 +12,7 @@ import {
 } from "@/lib/services/data";
 import { getFrontendPlatformFeePercent, calcPlatformFee, BLOCKCHAIN_GAS_LABEL } from "@/lib/frontend-fee-config";
 import { useServices } from "@/contexts/services-context";
+import { backendApi } from "@/lib/backend-api";
 import { Overlay } from "./feedback";
 import { Avatar, Button, Card, cx, IconButton, Pill } from "./ui";
 import {
@@ -42,13 +43,43 @@ export function ServiceDetail({
   const { getService, getProvider } = useServices();
   const [active, setActive] = useState(0);
   const [reportOpen, setReportOpen] = useState(false);
+  // Catalogue responses carry only a cover thumbnail, so the full gallery is
+  // fetched for the single listing being viewed. Until it arrives, the cover
+  // keeps the gallery looking complete.
+  const [fullImages, setFullImages] = useState<string[] | null>(null);
+  const serviceId = service?.id ?? null;
+
+  useEffect(() => {
+    setActive(0);
+    setFullImages(null);
+    if (!open || !serviceId) return;
+    let cancelled = false;
+    backendApi.services
+      .get(serviceId)
+      .then((res) => {
+        const imgs = res?.service?.images;
+        if (!cancelled && Array.isArray(imgs) && imgs.length > 0) setFullImages(imgs);
+      })
+      .catch(() => {
+        // Detail still renders from the cover; the gallery is a progressive
+        // enhancement, not a requirement for the page to work.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, serviceId]);
 
   const persistedService = service ? getService(service.id) : undefined;
   if (!persistedService) return null;
   service = persistedService as Service;
   const cat = CATEGORY_MAP[service.category];
   const provider = getProvider(service.ownerId);
-  const images = service.images.length > 0 ? service.images : [""];
+  const gallery = fullImages && fullImages.length > 0
+    ? fullImages
+    : service.coverImage
+      ? [service.coverImage]
+      : service.images;
+  const images = gallery.length > 0 ? gallery : [""];
   const idx = Math.min(active, images.length - 1);
   const isMine = service.ownerId === "me" || provider?.isMe === true;
 

@@ -72,6 +72,10 @@ export interface Service {
   price: number;
   deliveryId: DeliveryId;
   images: string[]; // image query strings -> placeholder.svg
+  // Small thumbnail of images[0] used by catalogue cards. List responses
+  // deliberately exclude the full `images` gallery to keep payloads small;
+  // detail views fetch it by id.
+  coverImage?: string;
   active: boolean;
   createdAt: number;
   updatedAt: number;

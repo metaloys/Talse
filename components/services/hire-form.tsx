@@ -135,7 +135,7 @@ export function HireForm({
     }
   };
 
-  const img = service.images[0];
+  const img = service.coverImage ?? service.images[0];
 
   return (
     <Overlay open={open} onClose={onClose} title="Hire request">

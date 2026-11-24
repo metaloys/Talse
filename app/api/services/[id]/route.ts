@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { TITLE_MAX, DESC_MAX } from "@/lib/services/data";
+import { sanitizeCoverImage } from "@/lib/service-images";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -38,6 +39,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const patch: Record<string, unknown> = {};
     for (const key of allowed) {
       if (key in body) patch[key] = body[key];
+    }
+    // cover_image is derived from images, so it is validated separately rather
+    // than copied verbatim: a listing may legitimately clear it with "".
+    if ("coverImage" in body) {
+      patch.cover_image = sanitizeCoverImage(body.coverImage);
     }
 
     if ("title" in patch) {

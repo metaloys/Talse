@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
 import { TITLE_MAX, DESC_MAX } from "@/lib/services/data";
 import { assertNotSuspended, SuspendedError } from "@/lib/suspension";
+import { sanitizeCoverImage } from "@/lib/service-images";
 
 // GET /api/services?category=design&q=logo&owner=<uid>
 // Public read — powers Home / Categories / Search screens.
@@ -28,12 +29,19 @@ export async function GET(req: NextRequest) {
   // hard cap
   perPage = Math.min(perPage, 50);
 
+  // Catalogue rows deliberately omit services.images: that column holds
+  // full-size base64 data URLs (~4 MB per listing), so selecting it made every
+  // Home/search load weigh ~19 MB. Cards render cover_image instead; the
+  // detail route (app/api/services/[id]) still returns the full gallery for
+  // the single listing a user opens.
+  const LIST_COLUMNS =
+    "id, owner_uid, title, category, description, price, delivery_id, active, " +
+    "boosted_until, created_at, updated_at, cover_image, " +
+    "profiles!services_owner_uid_fkey(username, display_name, avatar_url, rating_avg, rating_count, jobs_completed, refunds_against_provider, total_earned)";
+
   let query = supabaseAdmin
     .from("services")
-    .select(
-      "*, profiles!services_owner_uid_fkey(username, display_name, avatar_url, rating_avg, rating_count, jobs_completed, refunds_against_provider, total_earned)",
-      { count: "exact" }
-    )
+    .select(LIST_COLUMNS, { count: "exact" })
     .order("boosted_until", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false });
 
@@ -110,7 +118,7 @@ export async function POST(req: NextRequest) {
     await assertNotSuspended(me.uid);
     const body = await req.json();
 
-    const { title, category, description, price, deliveryId, images } = body;
+    const { title, category, description, price, deliveryId, images, coverImage } = body;
     if (!title || !category || !description || price == null || !deliveryId) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
     }
@@ -140,6 +148,7 @@ export async function POST(req: NextRequest) {
         price: priceNum,
         delivery_id: deliveryId,
         images: images ?? [],
+        cover_image: sanitizeCoverImage(coverImage),
       })
       .select()
       .single();

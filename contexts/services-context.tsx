@@ -121,6 +121,7 @@ function mapBackendService(row: any): Service {
     price: Number(row.price),
     deliveryId: row.delivery_id,
     images: row.images ?? [],
+    coverImage: row.cover_image ?? (Array.isArray(row.images) ? row.images[0] : undefined),
     active: row.active,
     createdAt: new Date(row.created_at).getTime(),
     // Map boosted_until so client can sort the same way server does.
@@ -209,6 +210,8 @@ export interface NewServiceInput {
   price: number;
   deliveryId: DeliveryId;
   images: string[];
+  /** Optional small thumbnail of images[0] for catalogue cards. */
+  coverImage?: string;
 }
 
 export interface HireInput {
@@ -361,7 +364,9 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
       setLoadedPages(1);
     } catch (err) {
       console.error("[Services] Failed to load services:", err);
-      setStorageTrouble(true);
+      // A catalogue fetch failing is a *load* problem, not a storage problem:
+      // it must never raise the "your data is safe" storage notice.
+      pushToast("Couldn't load listings. Please try again.", "warning");
     }
   };
 
@@ -638,7 +643,8 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
                   setProfile(loadedProfile);
                 }
               } catch {
-                if (!cancelled) setStorageTrouble(true);
+                // Profile is cosmetic: a failed read must not surface a
+                // storage warning, because nothing is being saved.
               }
             }
           }
@@ -655,10 +661,8 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
                 setProfile(loadedProfile);
               }
             } catch {
-              if (!cancelled) setStorageTrouble(true);
+              // Ignore, as above.
             }
-          } else {
-            if (!cancelled) setStorageTrouble(true);
           }
         }
       } else {
@@ -673,19 +677,21 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
               setProfile(loadedProfile);
             }
           } catch {
-            if (!cancelled) setStorageTrouble(true);
+            // Ignore, as above.
           }
         }
       }
 
+      // Boot order is deliberate: only the catalogue gates first paint. The
+      // user's own hire requests (two paginated round trips) load in the
+      // background instead of holding the whole interface on a loading screen.
       await refreshServices();
       if (cancelled) return;
+      setReady(true);
 
       if (accessToken) {
-        await refreshRequests();
+        void refreshRequests();
       }
-
-      if (!cancelled) setReady(true);
     })();
 
     return () => {
@@ -751,6 +757,7 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
         price: input.price,
         deliveryId: input.deliveryId,
         images: input.images.slice(0, 4),
+        coverImage: input.coverImage,
       },
       token
     );
@@ -771,6 +778,7 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
         price: input.price,
         delivery_id: input.deliveryId,
         images: input.images.slice(0, 4),
+        coverImage: input.coverImage,
       },
       token
     );

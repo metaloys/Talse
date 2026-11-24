@@ -21,7 +21,7 @@ export function ServiceCard({
   className?: string;
 }) {
   const cat = CATEGORY_MAP[service.category];
-  const img = service.images[0];
+  const img = service.coverImage ?? service.images[0];
   const promoted = (service.boostedUntil ?? 0) > Date.now();
   return (
     <button
@@ -78,7 +78,7 @@ export function ServiceRow({
   onOpen: () => void;
 }) {
   const cat = CATEGORY_MAP[service.category];
-  const img = service.images[0];
+  const img = service.coverImage ?? service.images[0];
   return (
     <button
       onClick={onOpen}

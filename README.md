@@ -289,6 +289,18 @@ The schema includes several key columns that matter for a production-like workfl
 
 This means the code is designed around a backend record of escrow-related events, not only a transient UI workflow.
 
+## Catalogue payload and start-up performance
+
+Portfolio images are stored as base64 data URLs in `services.images`. They are full-size galleries, and they are only needed once a user opens a single listing — so catalogue responses do not contain them:
+
+- `GET /api/services` selects an explicit column list that excludes `images` and includes `services.cover_image`, a small (≤320 px WebP) thumbnail generated client-side in `lib/image-compress.ts` and validated server-side in `lib/service-images.ts`.
+- `GET /api/services/[id]` still returns the full gallery; `service-detail.tsx` and the edit form fetch it by id when they need it.
+- Migration `010_service_cover.sql` adds the column; `scripts/backfill-covers.mjs` re-encodes legacy full-size rows once (it uses Playwright's Chromium as an image codec, so no native image dependency is added).
+
+Before this change one catalogue page weighed ~19 MB and was awaited before the app rendered anything. Start-up also no longer waits on the user's own hire requests: `contexts/services-context.tsx` sets `ready` as soon as the catalogue resolves and loads requests in the background.
+
+The "Saving again — your data is safe" notice is reserved for actual failed *writes*. Failed reads and failed catalogue loads surface as a normal toast instead, and the notice auto-hides.
+
 ## Security considerations
 
 The repository is deliberately structured around security boundaries that are visible in the code:

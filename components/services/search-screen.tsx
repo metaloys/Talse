@@ -71,6 +71,7 @@ export function SearchScreen({
           price: Number(row.price),
           deliveryId: row.delivery_id,
           images: row.images ?? [],
+          coverImage: row.cover_image ?? (Array.isArray(row.images) ? row.images[0] : undefined),
           active: row.active,
           createdAt: new Date(row.created_at).getTime(),
           updatedAt: new Date(row.updated_at).getTime(),
