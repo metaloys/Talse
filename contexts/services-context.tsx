@@ -10,7 +10,7 @@ import React, {
   type ReactNode,
 } from "react";
 import { usePiAuth } from "@/contexts/pi-auth-context";
-import { useRealtimeClient } from "@/contexts/realtime-client-context";
+import { useRealtimeClient, type RealtimeChannel } from "@/contexts/realtime-client-context";
 import { backendApi } from "@/lib/backend-api";
 import { track } from "@/lib/analytics";
 import {
@@ -448,9 +448,12 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
       [requests]
     );
 
-    const channelsRef = useRef<Map<string, ReturnType<typeof realtimeClient.channel>>>(new Map());
+    const channelsRef = useRef<Map<string, RealtimeChannel>>(new Map());
 
     useEffect(() => {
+      // The client loads after first paint; re-running when it arrives picks up
+      // the subscriptions below.
+      if (!realtimeClient) return;
       const currentIds = new Set(requestIdsKey ? requestIdsKey.split(",") : []);
       const existing = channelsRef.current;
 
@@ -529,6 +532,7 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
     });
 
     useEffect(() => {
+      if (!realtimeClient) return;
       // create a single, persistent public channel for service feed updates
       const servicesChannel = realtimeClient.channel("services-feed", { config: { private: false } });
       servicesChannel.on("broadcast", { event: "*" }, () => {
@@ -549,6 +553,7 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
 
     useEffect(() => {
       if (!piUser?.uid) return;
+      if (!realtimeClient) return;
 
       const incomingRequestsChannel = realtimeClient.channel(`user:${piUser.uid}:incoming-requests`, {
         config: { private: true },
