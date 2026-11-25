@@ -14,13 +14,13 @@ import {
   IconArrowRight,
   IconBolt,
   IconCheckCircle,
-  IconLogo,
   IconPlus,
   IconSearch,
   IconShield,
   IconSparkle,
   IconWallet,
 } from "./icons";
+import { BrandMark } from "@/components/brand";
 import { FeaturedCard, ServiceCard, ServiceRow } from "./service-card";
 
 export function HomeScreen({
@@ -63,9 +63,7 @@ export function HomeScreen({
               shows the logo and name, so hide it to avoid a duplicate. */}
           <div className="flex items-center justify-between gap-3 lg:hidden">
             <div className="flex min-w-0 items-center gap-2">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-                <IconLogo size={20} />
-              </div>
+              <BrandMark size={36} className="h-9 w-9 shrink-0 rounded-xl shadow-sm" />
               <div className="min-w-0">
                 <h1 className="text-lg font-bold leading-tight text-foreground">{APP_NAME}</h1>
               </div>

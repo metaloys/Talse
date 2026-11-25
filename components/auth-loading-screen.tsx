@@ -3,7 +3,8 @@
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { APP_NAME, APP_TAGLINE } from "@/lib/services/data";
 import { Button } from "@/components/services/ui";
-import { IconLogo, IconShield, IconSpinner } from "@/components/services/icons";
+import { IconShield, IconSpinner } from "@/components/services/icons";
+import { BrandMark } from "@/components/brand";
 
 /**
  * Auth handshake screen. Since Phase 1 (guest mode) the app no longer gates on
@@ -22,9 +23,7 @@ export function AuthLoadingScreen() {
   return (
     <div className="ps-hero-rich flex min-h-screen flex-col items-center justify-center px-6 ps-safe-top ps-safe-bottom">
       <div className="flex w-full max-w-sm flex-col items-center text-center">
-        <div className="ps-anim-pop flex h-20 w-20 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-lg">
-          <IconLogo size={40} />
-        </div>
+        <BrandMark size={80} className="ps-anim-pop h-20 w-20 shrink-0 rounded-3xl shadow-lg" />
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight text-foreground">{APP_NAME}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{APP_TAGLINE}</p>
 

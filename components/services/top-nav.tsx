@@ -4,7 +4,8 @@ import type { ReactNode } from "react";
 import { APP_NAME, type TabId } from "@/lib/services/data";
 import { NAV_ITEMS, badgeFor } from "./bottom-nav";
 import { Button, cx } from "./ui";
-import { IconLogo, IconPlus } from "./icons";
+import { IconPlus } from "./icons";
+import { BrandMark } from "@/components/brand";
 
 /**
  * Desktop top navigation. Hidden on mobile, where the app keeps its five-tab
@@ -34,9 +35,7 @@ export function TopNav({
           className="ps-press flex items-center gap-2"
           aria-label={`${APP_NAME} home`}
         >
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            <IconLogo size={20} />
-          </span>
+          <BrandMark size={36} className="h-9 w-9 shrink-0 rounded-xl shadow-sm" />
           <span className="text-lg font-bold text-foreground">{APP_NAME}</span>
         </button>
 

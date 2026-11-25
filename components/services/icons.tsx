@@ -318,15 +318,6 @@ export function IconArrowRight(p: IconProps) {
   );
 }
 
-export function IconLogo(p: IconProps) {
-  return (
-    <svg {...base({ ...p, strokeWidth: 1.6 })}>
-      <path d="M6 4h7a5 5 0 0 1 0 10H9v6" />
-      <path d="M8.5 8.5h9" />
-    </svg>
-  );
-}
-
 // ---- category dispatcher ----
 function IconPalette(p: IconProps) {
   return (

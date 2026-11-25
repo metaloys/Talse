@@ -6,17 +6,15 @@ import { cx, IconButton } from "./ui";
 import {
   IconCheckCircle,
   IconClose,
-  IconLogo,
   IconShield,
   IconSpinner,
 } from "./icons";
+import { BrandMark } from "@/components/brand";
 
 export function LoadingScreen() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-6">
-      <div className="ps-anim-pop flex h-20 w-20 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-lg">
-        <IconLogo size={40} />
-      </div>
+      <BrandMark size={80} className="ps-anim-pop h-20 w-20 shrink-0 rounded-3xl shadow-lg" />
       <h1 className="mt-5 text-xl font-bold text-foreground">{APP_NAME}</h1>
       <p className="mt-1 text-sm text-muted-foreground">Getting things ready…</p>
       <div className="mt-6 text-primary">

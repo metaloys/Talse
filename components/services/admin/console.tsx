@@ -15,6 +15,7 @@ import { useMemo, useState, type ComponentType } from "react";
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { backendApi } from "@/lib/backend-api";
 import { APP_NAME } from "@/lib/services/data";
+import { BrandMark } from "@/components/brand";
 import { Button, Card, cx } from "../ui";
 import { IconActivity, IconBolt, IconCheckCircle, IconClock, IconClose, IconFlag, IconGrid, IconInbox, IconPaperclip, IconShield, IconSliders, IconStar, IconTag, IconUser, IconWallet } from "../icons";
 import { ToastProvider, useToast, useAsync, StatusPill } from "./primitives";
@@ -161,7 +162,7 @@ function ConsoleShell({ onExit }: { onExit: () => void }) {
       )}>
         <div className="flex h-14 items-center justify-between border-b border-border px-4">
           <div className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-xs font-black text-primary-foreground">π</span>
+            <BrandMark size={28} className="h-7 w-7 shrink-0 rounded-lg" />
             <div>
               <p className="text-sm font-bold leading-none text-foreground">{APP_NAME}</p>
               <p className="text-[10px] text-muted-foreground">Admin console</p>
