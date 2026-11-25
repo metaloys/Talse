@@ -48,7 +48,7 @@ export function ReportSheet({
   targetId: string;
   targetLabel?: string;
 }) {
-  const { accessToken } = usePiAuth();
+  const { accessToken, signIn } = usePiAuth();
   const { pushToast } = useServices();
   const [reason, setReason] = useState<string>("");
   const [details, setDetails] = useState("");
@@ -81,9 +81,16 @@ export function ReportSheet({
       setError(`Choose what is wrong with this ${noun}.`);
       return;
     }
-    if (!accessToken) {
-      setError("You need to be signed in with Pi to report something.");
-      return;
+    // Guest reporters are asked to sign in (Phase 1: reporting is an
+    // account-gated action). signIn() resolves with the fresh token rather than
+    // a stale `accessToken` closure, so this works on the first attempt.
+    let token = accessToken;
+    if (!token) {
+      token = await signIn();
+      if (!token) {
+        setError("You need to be signed in with Pi to report something.");
+        return;
+      }
     }
     setBusy(true);
     setError(null);
@@ -92,7 +99,7 @@ export function ReportSheet({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           target_type: targetType,
