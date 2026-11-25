@@ -11,7 +11,10 @@ export async function mintRealtimeToken(piUid: string): Promise<string> {
   return await new SignJWT({ role: "authenticated", pi_uid: piUid })
     .setProtectedHeader({ alg: "ES256", kid })
     .setIssuedAt()
-    .setExpirationTime("10m")
+    // 1h: the client refreshes the token every ~8 min, and the longer lifetime
+    // keeps Realtime authorized across a missed refresh (the socket is only
+    // re-authorized when a new token arrives).
+    .setExpirationTime("1h")
     .setAudience("authenticated")
     .sign(privateKey);
 }

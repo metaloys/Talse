@@ -27,10 +27,24 @@ export function RealtimeClientProvider({ children }: { children: ReactNode }) {
   // as soon as it resolves — rather than shipping it in the first-load bundle.
   const [client, setClient] = useState<SupabaseClient | null>(null);
   useEffect(() => {
+    // Wait for a realtime token before exposing the client: subscribers create
+    // their channels the moment the client appears, and a private channel that
+    // connects before authorization fails permanently (it does not retry).
+    if (!realtimeToken || client) return;
     let cancelled = false;
     import("@/lib/supabase-browser")
-      .then(({ createRealtimeSupabaseClient }) => {
-        if (!cancelled) setClient(createRealtimeSupabaseClient(async () => tokenRef.current));
+      .then(async ({ createRealtimeSupabaseClient }) => {
+        const next = createRealtimeSupabaseClient(async () => tokenRef.current);
+        // Authorize the socket BEFORE any subscription is created. The client's
+        // `accessToken` option alone does NOT authorize Realtime channels —
+        // without this call every `config.private: true` channel fails to
+        // subscribe (verified end-to-end), which is why live updates were dead.
+        try {
+          await next.realtime.setAuth(realtimeToken);
+        } catch (err) {
+          console.error("[Realtime] setAuth failed:", err);
+        }
+        if (!cancelled) setClient(next);
       })
       .catch((err) => {
         console.error("[Realtime] failed to load realtime client:", err);
@@ -38,7 +52,21 @@ export function RealtimeClientProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [realtimeToken, client]);
+
+  // Re-authorize whenever the short-lived token is refreshed (~every 8 min).
+  // Without this the socket would be deauthorized the moment the first token
+  // expires and private channels would silently stop delivering.
+  useEffect(() => {
+    if (!client || !realtimeToken) return;
+    void (async () => {
+      try {
+        await client.realtime.setAuth(realtimeToken);
+      } catch (err) {
+        console.error("[Realtime] token refresh setAuth failed:", err);
+      }
+    })();
+  }, [client, realtimeToken]);
 
   return (
     <RealtimeClientContext.Provider value={client}>

@@ -126,11 +126,7 @@ export interface HireRequest {
 
 export interface ConversationMessage {
   id: string;
-  conversationId: string;
   hireRequestId: string;
-  serviceId: string;
-  customerPiId: string;
-  providerPiId: string;
   senderPiId: string;
   text: string;
   attachments?: string[];
@@ -796,35 +792,6 @@ export function sanitizeRequests(record: any): HireRequest[] {
 
 export function requestsToBlob(items: HireRequest[]): Record<string, unknown> {
   return { items: items.slice(0, REQUESTS_CAP) };
-}
-
-// Persistent messages
-export const MESSAGE_TEXT_MAX = 2000;
-
-export function sanitizeMessage(raw: any): ConversationMessage | null {
-  if (!raw || typeof raw !== "object") return null;
-  const text = cleanMultiline(raw.text, MESSAGE_TEXT_MAX);
-  const conversationId = cleanStr(raw.conversationId, 80);
-  const hireRequestId = cleanStr(raw.hireRequestId, 80);
-  const customerPiId = cleanStr(raw.customerPiId, 120);
-  const providerPiId = cleanStr(raw.providerPiId, 120);
-  const senderPiId = cleanStr(raw.senderPiId, 120);
-  if (!text || !conversationId || !hireRequestId || !customerPiId || !providerPiId || !senderPiId) return null;
-  return { id: cleanStr(raw.id, 80) || uid(), conversationId, hireRequestId, serviceId: cleanStr(raw.serviceId, 80), customerPiId, providerPiId, senderPiId, text, createdAt: clampNum(raw.createdAt, 0, Date.now() + DAY, Date.now()) };
-}
-
-export function sanitizeMessages(record: any): ConversationMessage[] {
-  const seen = new Set<string>();
-  const out: ConversationMessage[] = [];
-  for (const raw of extractItems(record)) {
-    const message = sanitizeMessage(raw);
-    if (message && !seen.has(message.id)) { seen.add(message.id); out.push(message); }
-  }
-  return out.sort((a, b) => a.createdAt - b.createdAt).slice(-400);
-}
-
-export function messagesToBlob(items: ConversationMessage[]): Record<string, unknown> {
-  return { items: items.slice(-400) };
 }
 
 // Meta

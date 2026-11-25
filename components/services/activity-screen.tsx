@@ -350,6 +350,22 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
             </div>
           </div>
         )}
+
+        {status === "pending" && (
+          <div className="mt-3">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={() => onOpenMessages?.(req.id)}
+            >
+              Message
+            </Button>
+            <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+              Ask a question before you accept — this thread is private to you and the other person.
+            </p>
+          </div>
+        )}
       </Card>
     );
   };

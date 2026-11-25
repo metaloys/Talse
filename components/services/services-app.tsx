@@ -8,6 +8,7 @@ import { LoadingScreen, Overlay, StorageNotice, ToastHost } from "./feedback";
 import { BottomNav } from "./bottom-nav";
 import { HomeScreen } from "./home-screen";
 import { NotificationInbox, useNotifications } from "./notifications-inbox";
+import { useUnreadMessages } from "./use-unread-messages";
 import { NotificationBell } from "./notification-bell";
 import { track, trackAppOpen } from "@/lib/analytics";
 
@@ -35,6 +36,7 @@ const DisputeResolution = dynamic(() => import("./dispute-resolution").then((m) 
  */
 export type AppDeepLink =
   | { type: "hire-request"; id: string }
+  | { type: "message"; id: string }
   | { type: "service"; id: string }
   | { type: "provider"; id: string };
 
@@ -44,6 +46,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
   const [tab, setTab] = useState<TabId>("home");
 
   const notifications = useNotifications();
+  const unreadMessages = useUnreadMessages();
   const [inboxOpen, setInboxOpen] = useState(false);
 
   // search preset (category hand-off from home/categories)
@@ -73,11 +76,21 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
   const [initialOpenRequestId, setInitialOpenRequestId] = useState<string | null>(null);
   const [messagesDeepLinkId, setMessagesDeepLinkId] = useState<string | null>(null);
   useEffect(() => {
-    if (initialDeepLink && initialDeepLink.type === "hire-request") {
+    if (!initialDeepLink) return;
+    if (initialDeepLink.type === "hire-request") {
       setTab("activity");
       setInitialOpenRequestId(initialDeepLink.id);
+    } else if (initialDeepLink.type === "message") {
+      setTab("messages");
+      setMessagesDeepLinkId(initialDeepLink.id);
     }
   }, [initialDeepLink]);
+
+  // A thread selection is a one-shot deep-link target; clear it when the user
+  // navigates away so returning to Messages doesn't force that thread.
+  useEffect(() => {
+    if (tab !== "messages") setMessagesDeepLinkId(null);
+  }, [tab]);
 
   // One app_open per session, fired only once the app is actually usable.
   useEffect(() => {
@@ -102,7 +115,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
   const handledDeepLink = useRef<string | null>(null);
   useEffect(() => {
     if (!initialDeepLink || !ready) return;
-    if (initialDeepLink.type === "hire-request") return;
+    if (initialDeepLink.type === "hire-request" || initialDeepLink.type === "message") return;
 
     const key = `${initialDeepLink.type}:${initialDeepLink.id}`;
     if (handledDeepLink.current === key) return;
@@ -175,6 +188,12 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
   // Tap-through from the notifications inbox. Only routes we can resolve in-app
   // are handled; anything else just closes the inbox.
   const handleNotificationNavigate = (subroute: string) => {
+    const msg = subroute.match(/^\/messages\/([^/?#]+)/);
+    if (msg) {
+      setMessagesDeepLinkId(msg[1]);
+      setTab("messages");
+      return;
+    }
     const hire = subroute.match(/^\/hire-requests\/([^/?#]+)/);
     if (hire) {
       setInitialOpenRequestId(hire[1]);
@@ -231,7 +250,14 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
           headerAction={notificationBell}
         />
       )}
-      {tab === "messages" && <MessagesScreen initialRequestId={messagesDeepLinkId ?? undefined} headerAction={notificationBell} />}
+      {tab === "messages" && (
+        <MessagesScreen
+          initialRequestId={messagesDeepLinkId ?? undefined}
+          headerAction={notificationBell}
+          unreadByRequest={unreadMessages.byRequest}
+          onRead={unreadMessages.refresh}
+        />
+      )}
       {tab === "profile" && (
         <ProfileScreen
           onCreate={openCreate}
@@ -247,6 +273,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
         active={tab}
         onChange={setTab}
         activityCount={incoming.filter((r) => r.status === "pending").length}
+        messagesUnreadCount={unreadMessages.total}
       />
 
       <NotificationInbox

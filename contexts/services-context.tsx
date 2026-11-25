@@ -189,11 +189,7 @@ function mapBackendRequest(row: any, currentUid: string | null): HireRequest {
 function mapBackendMessage(row: any): ConversationMessage {
   return {
     id: row.id,
-    conversationId: `hire:${row.hire_request_id}`,
     hireRequestId: row.hire_request_id,
-    serviceId: "",
-    customerPiId: "",
-    providerPiId: "",
     senderPiId: row.sender_uid,
     text: row.text,
     attachments: Array.isArray(row.attachments) ? row.attachments : [],
@@ -589,6 +585,22 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
       };
     }, []);
 
+  // The server does not publish realtime broadcasts yet, so returning to the app
+  // is the reliable moment to pick up whatever changed while it was backgrounded.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      void refreshServicesRef.current?.();
+      if (accessToken) void refreshRequestsRef.current?.();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [accessToken]);
+
   const loadMessagesForRequest = async (hireRequestId: string, before?: string | number) => {
     if (!accessToken) return { fetched: 0 };
     try {
@@ -599,14 +611,14 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
       const mapped = (msgs ?? []).map(mapBackendMessage);
       setMessages((prev) => {
         const others = prev.filter((m) => m.hireRequestId !== hireRequestId);
-        const existingFor = prev.filter((m) => m.hireRequestId === hireRequestId).sort((a, b) => a.createdAt - b.createdAt);
-        if (before) {
-          // mapped contains older messages (ascending); merge them before existing
-          const merged = [...mapped, ...existingFor];
-          return [...others, ...merged];
-        }
-        // replace with latest page
-        return [...others, ...mapped];
+        const existingFor = prev.filter((m) => m.hireRequestId === hireRequestId);
+        // Merge by id rather than replacing. A poll of the latest page must not
+        // throw away history the user loaded with "Load earlier messages".
+        const byId = new Map<string, ConversationMessage>();
+        for (const m of existingFor) byId.set(m.id, m);
+        for (const m of mapped) byId.set(m.id, m);
+        const merged = Array.from(byId.values()).sort((a, b) => a.createdAt - b.createdAt);
+        return [...others, ...merged];
       });
       return { fetched: (mapped ?? []).length, hasMore: !!hasMore };
     } catch (err) {

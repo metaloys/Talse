@@ -174,7 +174,16 @@ export async function POST(req: NextRequest) {
         const otherUid = hr.buyer_uid === me.uid ? hr.provider_uid : hr.buyer_uid;
         const excerpt = typeof text === "string" && text.trim().length > 0 ? text.trim().slice(0, 140) : "Sent an attachment";
         await notifyUsers([
-          { title: "New message", body: excerpt, user_uid: otherUid, subroute: `/hire-requests/${hireRequestId}` },
+          {
+            title: "New message",
+            body: excerpt,
+            user_uid: otherUid,
+            // Deep-links straight to the thread (not the request card) in both
+            // the in-app inbox and Pi's Notification Center.
+            subroute: `/messages/${hireRequestId}`,
+            kind: "message",
+            related_id: hireRequestId,
+          },
         ]);
       }
     } catch (notifyErr) {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { usePiAuth } from "@/contexts/pi-auth-context";
+import { useRealtimeClient } from "@/contexts/realtime-client-context";
 import { backendApi } from "@/lib/backend-api";
 import { Overlay } from "./feedback";
 import { EmptyState } from "./ui";
@@ -39,7 +40,8 @@ function timeAgo(iso: string): string {
  * app even when Pi's best-effort Notification Center push is dropped.
  */
 export function useNotifications() {
-  const { accessToken } = usePiAuth();
+  const { accessToken, piUser } = usePiAuth();
+  const realtimeClient = useRealtimeClient();
   const [items, setItems] = useState<Notice[]>([]);
   const [unread, setUnread] = useState(0);
 
@@ -75,6 +77,28 @@ export function useNotifications() {
     }, POLL_MS);
     return () => clearInterval(timer);
   }, [accessToken, load]);
+
+  // Live delivery: the `notifications` insert trigger (migration 015) broadcasts
+  // to `user:<uid>:notifications`, so the bell and inbox update immediately
+  // instead of waiting up to 45 s for the next poll. The poll stays as a
+  // fallback for when Realtime is unavailable.
+  useEffect(() => {
+    if (!realtimeClient || !piUser?.uid) return;
+    const channel = realtimeClient.channel(`user:${piUser.uid}:notifications`, {
+      config: { private: true },
+    });
+    channel.on("broadcast", { event: "notification" }, () => {
+      void load();
+    });
+    channel.subscribe();
+    return () => {
+      try {
+        channel.unsubscribe();
+      } catch {
+        // channel already gone
+      }
+    };
+  }, [realtimeClient, piUser?.uid, load]);
 
   return { items, unread, load, markAllSeen };
 }

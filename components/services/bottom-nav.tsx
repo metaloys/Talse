@@ -19,17 +19,20 @@ export function BottomNav({
   active,
   onChange,
   activityCount,
+  messagesUnreadCount = 0,
 }: {
   active: TabId
   onChange: (t: TabId) => void
   activityCount: number
+  messagesUnreadCount?: number
 }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md border-t border-border bg-card/95 backdrop-blur ps-safe-bottom">
       <ul className="flex items-stretch">
         {TABS.map((t) => {
           const isActive = active === t.id
-          const showBadge = t.id === "activity" && activityCount > 0
+          const badgeCount = t.id === "activity" ? activityCount : t.id === "messages" ? messagesUnreadCount : 0
+          const showBadge = badgeCount > 0
           return (
             <li key={t.id} className="flex-1">
               <button
@@ -45,7 +48,7 @@ export function BottomNav({
                   {t.icon}
                   {showBadge ? (
                     <span className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
-                      {activityCount > 9 ? "9+" : activityCount}
+                      {badgeCount > 9 ? "9+" : badgeCount}
                     </span>
                   ) : null}
                 </span>

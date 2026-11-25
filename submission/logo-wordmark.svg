@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 520" width="1600" height="520" role="img" aria-label="Talse">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7A3BE0"/>
+      <stop offset="0.55" stop-color="#5A21B8"/>
+      <stop offset="1" stop-color="#2B0E5E"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E9D8FF"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFE9A8"/>
+      <stop offset="0.5" stop-color="#FFC24B"/>
+      <stop offset="1" stop-color="#F29A1F"/>
+    </linearGradient>
+    <linearGradient id="text" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2B0E5E"/>
+      <stop offset="1" stop-color="#5A21B8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- App icon -->
+  <g transform="translate(40 90) scale(0.3333)">
+    <rect width="1024" height="1024" rx="224" fill="url(#bg)"/>
+    <rect x="252" y="258" width="520" height="148" rx="74" fill="url(#mark)"/>
+    <rect x="448" y="354" width="128" height="412" rx="64" fill="url(#mark)"/>
+    <path d="M792 168 L816 222 L870 246 L816 270 L792 324 L768 270 L714 246 L768 222 Z" fill="url(#gold)"/>
+    <path d="M470 792 l42 44 42 -44" fill="none" stroke="url(#gold)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" opacity="0.95"/>
+  </g>
+
+  <!-- Wordmark -->
+  <text x="420" y="300" font-family="Inter, 'Segoe UI', system-ui, sans-serif"
+        font-size="188" font-weight="800" letter-spacing="-4" fill="url(#text)">Talse</text>
+  <text x="426" y="372" font-family="Inter, 'Segoe UI', system-ui, sans-serif"
+        font-size="52" font-weight="600" fill="#7A6E92">Hire and offer services with Pi.</text>
+</svg>

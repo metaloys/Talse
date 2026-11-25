@@ -30,17 +30,20 @@ Working list for the "top 2" push. Grouped by impact. Everything below is on
 - [ ] Public browse mode + PiNet subdomain (required submission item).
 - [ ] Pi Public Chat Room + `Pi.openConversation` entry point.
 
-## UX — messaging clarity (NEW)
+## Messaging clarity + live-ish updates (done — see `MESSAGING-PLAN.md`)
 
-- [ ] **The messaging feature still confuses users about how it works.** Make it
-      obvious that Messages are a private, per-hire-request thread that only
-      becomes available after a hire request is accepted — and show *how* to use
-      them. Candidate fixes:
-      - an explanatory empty state + first-run hint on the Messages tab and the
-        hire-request detail ("Chat opens here once your request is accepted");
-      - a one-time inline tip the first time a request is accepted;
-      - a "How messaging works" help sheet reachable from the Messages tab;
-      - clear labels distinguishing private DMs from the public Chat Room.
+- [x] **Tier 1 — copy + feedback:** corrected the misleading "demo" empty state;
+      conversation shows the counterpart's name; status pill reflects real
+      status; failed sends now show an inline error with **Retry**; new-message
+      notifications open the thread (`/messages/[id]`) instead of the request.
+- [x] **Tier 2 — education:** "How messaging works" help sheet; explanatory empty
+      state; "private · one thread per request" strip; hire-request detail tells
+      the user when chat is available; explicit Messages-vs-Chat-Room wording.
+- [x] **Tier 3 — structural:** messaging now opens at `pending` too (ask before
+      accepting); unread tracking (`conversation_reads`, `/api/messages/unread`,
+      `/api/messages/read`) with a Messages-tab badge and per-thread dots;
+      merge-by-id refresh + 15 s thread poll + refresh-on-focus; removed the dead
+      legacy conversation model.
 
 ## Later / external
 
@@ -49,5 +52,10 @@ Working list for the "top 2" push. Grouped by impact. Everything below is on
 - [ ] Wire the Soroban escrow contract behind a feature flag.
 - [ ] Tests (fee math, payout double-spend guard, sanitizers).
 - [ ] Rewarded-ad → free boost.
-- [ ] Performance: `setInterval` polling in the inbox is a placeholder until a
-      realtime notifications channel exists.
+- [x] **Realtime (done — see `REALTIME.md`).** DB triggers publish signal-only
+      broadcasts; `contexts/realtime-client-context.tsx` now authorizes the
+      socket with `realtime.setAuth()` (the missing piece — `accessToken` alone
+      never authorized private channels). Covered: messages, hire requests,
+      services, notifications. Migration `015_realtime_broadcast.sql`.
+- [ ] Optimise `/api/messages/unread` (currently scans messages for the user's
+      requests; fine at hackathon scale, should become a counter/index later).

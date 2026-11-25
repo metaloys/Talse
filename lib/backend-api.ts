@@ -128,6 +128,10 @@ export const backendApi = {
     // existing upload endpoint). Call sites already pass this fourth arg.
     send: (hireRequestId: string, text: string, accessToken: string, attachments?: string[]) =>
       request<{ message: any }>(`/api/messages`, { method: "POST", body: { hireRequestId, text, attachments }, accessToken }),
+    unread: (accessToken: string) =>
+      request<{ total: number; byRequest: Record<string, number> }>(`/api/messages/unread`, { accessToken }),
+    markRead: (hireRequestId: string, accessToken: string) =>
+      request<{ ok: true }>(`/api/messages/read`, { method: "POST", body: { hireRequestId }, accessToken }),
   },
 
   notifications: {
