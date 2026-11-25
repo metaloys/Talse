@@ -5,6 +5,7 @@ import React, {
   useContext,
   useState,
   useEffect,
+  useRef,
   type ReactNode,
 } from "react";
 import { PI_NETWORK_CONFIG } from "@/lib/system-config";
@@ -127,8 +128,19 @@ interface PiAuthContextType {
   sdk: SDKLiteInstance | null;
   products: Product[] | null;
   restoredPurchases: UserPurchaseBalance[] | null;
-  reinitialize: () => Promise<void>;
+  reinitialize: () => Promise<boolean>;
   logout: () => Promise<void>;
+  /**
+   * Phase 1 guest mode: the app boots without authenticating and Pi.authenticate
+   * only runs when a visitor takes an account-gated action (hire, messages,
+   * activity, profile, create, boost, report, buy). Resolves with the Pi access
+   * token on success, or null when the attempt fails or the visitor backs out.
+   */
+  signIn: () => Promise<string | null>;
+  /** True while an explicit signIn() attempt is in flight (drives the auth overlay). */
+  signingIn: boolean;
+  /** Dismiss the auth error state and return the visitor to guest browsing. */
+  cancelSignIn: () => void;
   /** Real Pi Platform API access token (scopes: username, payments).
    *  Send as `Authorization: Bearer <accessToken>` to our own /api/* routes —
    *  this is the token our backend verifies server-side against
@@ -222,10 +234,21 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   const [realtimeToken, setRealtimeToken] = useState<string | null>(null);
   const [piUser, setPiUser] = useState<{ uid: string; username: string } | null>(null);
   const [recoveryInProgress, setRecoveryInProgress] = useState<boolean>(false);
+  const [signingIn, setSigningIn] = useState<boolean>(false);
+  // Serialize concurrent sign-in attempts: shared until the attempt settles so
+  // a double-tap of "Sign in with Pi" doesn't open two Pi consent sheets.
+  const signInPromiseRef = useRef<Promise<string | null> | null>(null);
+  // Mirrors `accessToken` so async handlers (signIn, report submit) can read the
+  // token immediately after a successful handshake without waiting for a render.
+  const accessTokenRef = useRef<string | null>(null);
 
   // Analytics is authenticated; keep the tracking client in sync with the token.
   useEffect(() => {
     setAnalyticsToken(accessToken);
+  }, [accessToken]);
+
+  useEffect(() => {
+    accessTokenRef.current = accessToken;
   }, [accessToken]);
 
   const recoverIncompletePaymentsAfterLogin = async (accessToken: string): Promise<void> => {
@@ -268,7 +291,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const initialize = async () => {
+  const initialize = async (): Promise<boolean> => {
     setHasError(false);
     setRestoredPurchases(null);
     try {
@@ -288,7 +311,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
           },
         } as SDKLiteInstance);
         setIsAuthenticated(true);
-        return;
+        return true;
       }
 
       setAuthMessage("Loading Pi SDK...");
@@ -325,6 +348,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
       // and to drive the periodic realtime-token refresh loop below.
       // This state is required for normal operation (not temporary).
       setAccessToken(authResult.accessToken);
+      accessTokenRef.current = authResult.accessToken;
       if (capturedIncompletePayment) {
         const paymentIdentifier = capturedIncompletePayment?.identifier ?? capturedIncompletePayment?.id ?? null;
         if (paymentIdentifier) {
@@ -378,6 +402,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
         setProducts([]);
         setRestoredPurchases([]);
       }
+      return true;
     } catch (err) {
       console.error("SDKLite initialization failed:", err);
       setHasError(true);
@@ -386,6 +411,7 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
           ? err.message
           : "Authentication failed. Please try again.",
       );
+      return false;
     }
   };
 
@@ -406,9 +432,58 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
+  // Guest mode (Phase 1): the app boots without calling Pi.authenticate, so a
+  // visitor can browse the public catalogue, share links and provider profiles
+  // with no prompt at all. signIn() is triggered by the visitor's first
+  // account-gated action (hire, messages, activity, profile, create/boost,
+  // report, buy). The one exception is an App Studio preview iframe, where the
+  // parent frame has already authenticated the Pioneer and pushes credentials
+  // via postMessage — there we complete the handshake automatically so the
+  // preview still behaves like the old always-authenticated build.
   useEffect(() => {
-    initialize();
+    let cancelled = false;
+    void requestParentCredentials().then((parentCredentials) => {
+      if (cancelled || !parentCredentials) return;
+      return initialize();
+    });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Explicit, user-triggered sign-in. Resolves with the Pi access token when
+   * the handshake completes, or null when it fails (the caller should then stay
+   * in guest mode). Concurrent callers share a single in-flight attempt so the
+   * Pi consent sheet never opens twice.
+   */
+  const signIn = async (): Promise<string | null> => {
+    if (isAuthenticated && accessToken) return accessToken;
+    if (signInPromiseRef.current) return signInPromiseRef.current;
+
+    const attempt = (async (): Promise<string | null> => {
+      setSigningIn(true);
+      setHasError(false);
+      try {
+        const ok = await initialize();
+        return ok ? accessTokenRef.current : null;
+      } finally {
+        setSigningIn(false);
+        signInPromiseRef.current = null;
+      }
+    })();
+
+    signInPromiseRef.current = attempt;
+    return attempt;
+  };
+
+  /** Return to guest browsing after a failed/cancelled sign-in attempt. */
+  const cancelSignIn = () => {
+    signInPromiseRef.current = null;
+    setSigningIn(false);
+    setHasError(false);
+  };
 
   useEffect(() => {
     if (!isAuthenticated || !accessToken) return;
@@ -419,15 +494,20 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
   }, [isAuthenticated, accessToken]);
 
   const logout = async () => {
-    // Reset in-memory auth state so the next authenticate() call prompts again.
+    // Return to guest mode. Previously this re-ran initialize() to re-prompt;
+    // with guest browsing (Phase 1) the next account-gated action signs the
+    // visitor back in, so we just clear the in-memory session.
+    signInPromiseRef.current = null;
     setAccessToken(null);
+    accessTokenRef.current = null;
     setPiUser(null);
+    setRealtimeToken(null);
     setIsAuthenticated(false);
     setSdk(null);
     setProducts(null);
     setRestoredPurchases(null);
-    // Re-run the initialize flow which invokes window.Pi.authenticate().
-    await initialize();
+    setSigningIn(false);
+    setHasError(false);
   };
 
   const value: PiAuthContextType = {
@@ -438,10 +518,13 @@ export function PiAuthProvider({ children }: { children: ReactNode }) {
     products,
     restoredPurchases,
     reinitialize: initialize,
+    logout,
+    signIn,
+    signingIn,
+    cancelSignIn,
     accessToken,
     realtimeToken,
     piUser,
-    logout,
     recoveryInProgress,
   };
 

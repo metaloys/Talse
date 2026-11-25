@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import dynamic from "next/dynamic";
 import type { CategoryId, Service, TabId } from "@/lib/services/data";
 import { ServicesProvider, useServices } from "@/contexts/services-context";
+import { usePiAuth } from "@/contexts/pi-auth-context";
+import { RequireAuth } from "./require-auth";
 import { LoadingScreen, Overlay, StorageNotice, ToastHost } from "./feedback";
 import { BottomNav } from "./bottom-nav";
 import { TopNav } from "./top-nav";
@@ -43,6 +45,7 @@ export type AppDeepLink =
 
 function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null }) {
   const { ready, storageTrouble, toasts, dismissToast, incoming, getService, pushToast, ensureService } = useServices();
+  const { isAuthenticated, signIn } = usePiAuth();
 
   const [tab, setTab] = useState<TabId>("home");
 
@@ -165,17 +168,33 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
     setTab("search");
   };
 
-  const openCreate = () => {
+  // Account-gated actions: signed-in users pass straight through; guests get
+  // the Pi consent flow. While the attempt runs, AppWrapper covers the app
+  // with the auth screen (so the tap they made is clearly working), and if the
+  // visitor backs out the action simply doesn't fire.
+  const ensureAuth = async (): Promise<boolean> => {
+    if (isAuthenticated) return true;
+    // signIn() resolves with the access token on success (it is read from a ref,
+    // not this closure, so it is current even though `isAuthenticated` below
+    // would be stale until the next render).
+    const token = await signIn();
+    return token !== null;
+  };
+
+  const openCreate = async () => {
+    if (!(await ensureAuth())) return;
     setEditing(null);
     setCreateOpen(true);
   };
 
-  const openEdit = (s: Service) => {
+  const openEdit = async (s: Service) => {
+    if (!(await ensureAuth())) return;
     setEditing(s);
     setCreateOpen(true);
   };
 
-  const openHire = (s: Service) => {
+  const openHire = async (s: Service) => {
+    if (!(await ensureAuth())) return;
     setDetailOpen(false);
     setHireService(s);
     setHireOpen(true);
@@ -210,9 +229,16 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
     }
   };
 
-  const openNotifications = () => {
+  const openNotifications = async () => {
+    if (!isAuthenticated) {
+      // signIn() returns the fresh token (from a ref), not a stale closure, so
+      // gating on it — rather than on `isAuthenticated` — correctly detects a
+      // completed handshake. useNotifications() starts loading the inbox on its
+      // own the moment the token appears, so no manual load() is needed here.
+      const token = await signIn();
+      if (!token) return;
+    }
     setInboxOpen(true);
-    void notifications.load();
   };
 
   // One bell, rendered into each tab's header (top-right) so alerts live in the
@@ -256,31 +282,37 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
         />
       )}
       {tab === "activity" && (
-        <ActivityScreen
-          onBrowse={() => setTab("search")}
-          initialOpenRequestId={initialOpenRequestId}
-          onOpenMessages={(requestId) => { setMessagesDeepLinkId(requestId); setTab("messages"); }}
-          onViewDispute={(requestId) => { setDisputeRequestId(requestId); setDisputesOpen(true); }}
-          headerAction={headerAction}
-        />
+        <RequireAuth title="Sign in to see your activity">
+          <ActivityScreen
+            onBrowse={() => setTab("search")}
+            initialOpenRequestId={initialOpenRequestId}
+            onOpenMessages={(requestId) => { setMessagesDeepLinkId(requestId); setTab("messages"); }}
+            onViewDispute={(requestId) => { setDisputeRequestId(requestId); setDisputesOpen(true); }}
+            headerAction={headerAction}
+          />
+        </RequireAuth>
       )}
       {tab === "messages" && (
-        <MessagesScreen
-          initialRequestId={messagesDeepLinkId ?? undefined}
-          headerAction={headerAction}
-          unreadByRequest={unreadMessages.byRequest}
-          onRead={unreadMessages.refresh}
-        />
+        <RequireAuth title="Sign in to read your messages">
+          <MessagesScreen
+            initialRequestId={messagesDeepLinkId ?? undefined}
+            headerAction={headerAction}
+            unreadByRequest={unreadMessages.byRequest}
+            onRead={unreadMessages.refresh}
+          />
+        </RequireAuth>
       )}
       {tab === "profile" && (
-        <ProfileScreen
-          onCreate={openCreate}
-          onEditService={openEdit}
-          onOpenService={openService}
-          onOpenReviews={() => setReviewsOpen(true)}
-          onOpenAdmin={() => setAdminOpen(true)}
-          headerAction={headerAction}
-        />
+        <RequireAuth title="Sign in to view your profile">
+          <ProfileScreen
+            onCreate={openCreate}
+            onEditService={openEdit}
+            onOpenService={openService}
+            onOpenReviews={() => setReviewsOpen(true)}
+            onOpenAdmin={() => setAdminOpen(true)}
+            headerAction={headerAction}
+          />
+        </RequireAuth>
       )}
 
       <BottomNav

@@ -32,7 +32,12 @@ Working list for the "top 2" push. Grouped by impact. Everything below is on
       metadata for chat previews.
 - [x] `/providers/[id]` deep link + `GET /api/providers/[id]` so a shared
       profile opens on a cold device.
-- [ ] Public browse mode + PiNet subdomain (required submission item).
+- [x] Public browse mode (guest mode, Phase 1): Pi sign-in is action-triggered,
+      the app boots without `Pi.authenticate`, account-gated tabs/actions show
+      an in-app sign-in CTA, `/privacy` & `/terms` stay auth-exempt. Verifies
+      in `next build`; pending live serve on the PiNet subdomain.
+- [ ] Serve public browse on the PiNet subdomain (deploy current build; test
+      `pi_url` in Pi Browser once portal config is settled).
 - [ ] Pi Public Chat Room + `Pi.openConversation` entry point.
 
 ## Messaging clarity + live-ish updates (done — see `MESSAGING-PLAN.md`)
