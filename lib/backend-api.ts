@@ -257,6 +257,9 @@ export const backendApi = {
         takeRate: number;
         assumptions: { piUsdRate: number; feePercent: number; boostPricePi: number; networkFeePi: number };
       }>(`/api/admin/accounting?range=${range}`, { accessToken }),
+    piPrice: (accessToken: string) =>
+      request<{ quote: { usd: number; source: string; sources: { name: string; usd: number }[]; fetchedAt: string } | null }>(
+        `/api/admin/pi-price`, { accessToken }),
     live: (accessToken: string) =>
       request<{ items: any[]; generatedAt: string }>(`/api/admin/live`, { accessToken }),
     getConfig: (accessToken: string) =>

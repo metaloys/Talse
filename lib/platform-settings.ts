@@ -24,7 +24,7 @@ export type PlatformSettings = {
   feature_offers_enabled: boolean;
   feature_boosts_enabled: boolean;
   feature_analytics_enabled: boolean;
-  /** USD per 1 Pi, used only for revenue reporting. An assumption, not a quote. */
+  /** USD per 1 Pi fallback for revenue reporting; the live market price is preferred. */
   pi_usd_rate: number;
 };
 
@@ -57,8 +57,7 @@ export const PLATFORM_SETTING_DEFAULTS: PlatformSettings = {
   feature_offers_enabled: true,
   feature_boosts_enabled: true,
   feature_analytics_enabled: true,
-  // Placeholder reporting assumption. Update to the current rate from
-  // Configuration; projections recompute from whatever is stored here.
+  // Fallback USD per 1 Pi, used only when the live market price cannot be read.
   pi_usd_rate: 0.3,
 };
 
@@ -79,8 +78,8 @@ export const SETTING_META: Record<
   feature_boosts_enabled: { label: "Boosts", hint: "Featured listing boosts", kind: "bool" },
   feature_analytics_enabled: { label: "Analytics", hint: "Product event collection", kind: "bool" },
   pi_usd_rate: {
-    label: "Pi price (USD)",
-    hint: "Reporting assumption for USD projections — not a live quote",
+    label: "Pi price fallback (USD)",
+    hint: "Used only when the live market price is unavailable — the report prefers the live rate",
     kind: "usd",
   },
 };

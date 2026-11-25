@@ -38,6 +38,7 @@ async function downloadAccountingCsv(range: string, token: string) {
 export function RevenueScreen({ ctx }: { ctx: ScreenCtx }) {
   const [range, setRange] = useState("30");
   const { data, loading, error } = useAsync(() => backendApi.admin.accounting(range, ctx.token), [range]);
+  const price = useAsync(() => backendApi.admin.piPrice(ctx.token), []);
   const l = data?.lifetime;
   const t = data?.rangeTotals;
   const series = data?.series ?? [];
@@ -93,7 +94,7 @@ export function RevenueScreen({ ctx }: { ctx: ScreenCtx }) {
         </div>
       </Card>
 
-      <ScenarioPlanner defaults={data?.assumptions} />
+      <ScenarioPlanner defaults={data?.assumptions} livePrice={price.data?.quote ?? null} />
 
       <DataTable
         columns={[

@@ -12,12 +12,12 @@
 //   - network fee the platform absorbs per released payout (Pi)
 //   - infrastructure (USD per month, entered by the planner)
 //
-// USD values are Pi x an explicitly assumed rate. The rate is an input, never a
-// live quote — change it in Configuration or in the planner and everything
-// recomputes.
+// USD values are Pi x a rate. The console defaults that rate to the live market
+// Pi price (lib/pi-price.ts) and lets the planner override it; the rate stays an
+// explicit input here so this maths is pure and deterministic.
 
 export type ScenarioInputs = {
-  /** USD per 1 Pi. An assumption, not a market quote. */
+  /** USD per 1 Pi. Defaults to the live market price; overridable in the planner. */
   piUsdRate: number;
   /** Job completion fee as a fraction, e.g. 0.05 or 0.10. */
   feePercent: number;

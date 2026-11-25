@@ -19,6 +19,14 @@ import {
 
 type Defaults = Partial<Pick<ScenarioInputs, "piUsdRate" | "feePercent" | "boostPricePi" | "networkFeePi">>;
 
+/** Live Pi→USD quote shape returned by /api/admin/pi-price. */
+export type LivePrice = {
+  usd: number;
+  source: string;
+  sources: { name: string; usd: number }[];
+  fetchedAt: string;
+};
+
 function positive(value: unknown, fallback: number): number {
   const n = Number(value);
   return Number.isFinite(n) && n > 0 ? n : fallback;
@@ -113,17 +121,19 @@ function SplitBar({ jobShare, boostShare }: { jobShare: number; boostShare: numb
   );
 }
 
-export function ScenarioPlanner({ defaults }: { defaults?: Defaults }) {
+export function ScenarioPlanner({ defaults, livePrice }: { defaults?: Defaults; livePrice?: LivePrice | null }) {
   const [overrides, setOverrides] = useState<Partial<ScenarioInputs>>({});
 
   const settingsDefaults = useMemo<Partial<ScenarioInputs>>(
     () => ({
-      piUsdRate: positive(defaults?.piUsdRate, SCENARIO_DEFAULTS.piUsdRate),
+      // The live market price is the default; the stored value is only a
+      // fallback for when no market can be reached.
+      piUsdRate: livePrice?.usd ?? positive(defaults?.piUsdRate, SCENARIO_DEFAULTS.piUsdRate),
       feePercent: positive(defaults?.feePercent, SCENARIO_DEFAULTS.feePercent),
       boostPricePi: positive(defaults?.boostPricePi, SCENARIO_DEFAULTS.boostPricePi),
       networkFeePi: nonNegative(defaults?.networkFeePi, SCENARIO_DEFAULTS.networkFeePi),
     }),
-    [defaults?.piUsdRate, defaults?.feePercent, defaults?.boostPricePi, defaults?.networkFeePi],
+    [livePrice?.usd, defaults?.piUsdRate, defaults?.feePercent, defaults?.boostPricePi, defaults?.networkFeePi],
   );
 
   const inputs = useMemo<ScenarioInputs>(
@@ -136,6 +146,17 @@ export function ScenarioPlanner({ defaults }: { defaults?: Defaults }) {
     setOverrides((prev) => ({ ...prev, [key]: value }));
 
   const reset = () => setOverrides({});
+
+  const piPriceOverridden = overrides.piUsdRate !== undefined;
+  const clearPiPriceOverride = () =>
+    setOverrides((prev) => {
+      const next = { ...prev };
+      delete next.piUsdRate;
+      return next;
+    });
+  const liveTime = livePrice
+    ? new Date(livePrice.fetchedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : "";
 
   const exportCsv = () => {
     const blob = new Blob([scenarioCsv(result)], { type: "text/csv;charset=utf-8" });
@@ -162,7 +183,7 @@ export function ScenarioPlanner({ defaults }: { defaults?: Defaults }) {
         <div>
           <SectionHeading>Scenario planner</SectionHeading>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            Every field is an assumption you can change. USD uses the Pi price below — not a live quote.
+            Every field is an assumption you can change. USD uses the live market Pi price, which you can override below.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -246,10 +267,32 @@ export function ScenarioPlanner({ defaults }: { defaults?: Defaults }) {
           </div>
         </div>
 
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+          {livePrice ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-success-soft px-2.5 py-1 font-semibold text-success-foreground">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" />
+              Live market · ${livePrice.usd.toFixed(4)}/π · {livePrice.source} · {liveTime}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-warning-soft px-2.5 py-1 font-semibold text-warning-foreground">
+              Live price unavailable — using the stored assumption
+            </span>
+          )}
+          {piPriceOverridden && (
+            <button
+              type="button"
+              onClick={clearPiPriceOverride}
+              className="rounded-full border border-border px-2.5 py-1 font-semibold text-foreground hover:bg-secondary"
+            >
+              Manual override in use — reset to live
+            </button>
+          )}
+        </div>
+
         <div className="mt-2 grid grid-cols-2 gap-3 lg:grid-cols-4">
           <NumField
             label="Pi price"
-            hint="USD per 1 π · assumption"
+            hint={livePrice && !piPriceOverridden ? "USD per 1 π · live market" : "USD per 1 π · manual"}
             value={inputs.piUsdRate}
             onCommit={(v) => set("piUsdRate", v)}
             prefix="$"
@@ -350,7 +393,7 @@ export function ScenarioPlanner({ defaults }: { defaults?: Defaults }) {
 
       <p className="mt-2 text-[10px] leading-relaxed text-muted-foreground">
         Model: job fees = released jobs × average value × fee%; boosts = boosts sold × boost price. Costs = network
-        fee absorbed + infra. USD = π × the assumed Pi price. Projections are not forecasts.
+        fee absorbed + infra. USD = π × the live market Pi price (or your override). Projections are not forecasts.
       </p>
     </Card>
   );

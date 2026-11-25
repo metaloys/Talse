@@ -110,9 +110,9 @@ marketplace starts with a community that already trusts the same currency.
 - [ ] Screenshots / previews — `submission/previews/` (Home, listing, checkout,
       messages, profile)
 - [ ] Demo video (≤ 3 min, English) — TODO link
-- [ ] Business model — [`REVENUE-COSTS.md`](./REVENUE-COSTS.md) (π + USD, editable assumptions)
+- [ ] Business model — [`REVENUE-COSTS.md`](./REVENUE-COSTS.md) (π + USD, live market Pi price)
 - [ ] App URL — https://talse.vercel.app
-- [ ] Pi Browser / sandbox URL — https://sandbox.minepi.com/mobile-app/ui/app/vendrapi-xmax
+- [ ] Pi Browser / sandbox URL — https://sandbox.minepi.com/mobile-app-ui/app/vendrapi-xmax
 
 ## 10. Copy for the submission form
 
@@ -142,8 +142,10 @@ Talse earns from two sources, reported separately in
 1. **Job completion fee** — 5% or 10% of each released job (a platform setting).
 2. **Listing boosts** — a one-time Pi payment that promotes a listing for 7 days.
 
-Every figure is quoted in **π and USD**. The Pi→USD rate is an editable, versioned
-platform setting (Configuration → "Pi price (USD)"), so every projection can be
-re-run at a different rate without touching historical ledger rows. The admin
-Revenue & P&L screen ships a live scenario planner with the same maths and a CSV
-export.
+Every figure is quoted in **π and USD**. π is the stable unit the platform books;
+the USD column is derived from the **live market Pi price**, read from public
+exchanges (median of OKX / Bitget / MEXC / CoinGecko) by the admin Revenue & P&L
+screen — never a hardcoded rate. The planner can override the price to test a
+scenario, and a stored fallback (Configuration → "Pi price fallback (USD)") is used
+only if no market can be reached. The screen ships the same maths, a live scenario
+planner, and a CSV export.
