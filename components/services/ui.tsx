@@ -1,7 +1,7 @@
 "use client";
 
 import React, { type ReactNode, type TextareaHTMLAttributes, type InputHTMLAttributes, type SelectHTMLAttributes } from "react";
-import { IconInbox, IconMinus, IconPlus } from "./icons";
+import { IconInbox, IconMinus, IconPlus, IconStar } from "./icons";
 
 export function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(" ");
@@ -190,6 +190,29 @@ export function Field({
       {hint && !error && <p className="text-xs text-muted-foreground">{hint}</p>}
       {error && <p className="text-xs font-medium text-destructive">{error}</p>}
     </div>
+  );
+}
+
+// ---- Stars (read-only rating display) ----
+export function Stars({
+  value,
+  size = 14,
+  className,
+}: {
+  value: number;
+  size?: number;
+  className?: string;
+}) {
+  const rounded = Math.round(value);
+  return (
+    <span
+      className={cx("inline-flex items-center gap-0.5", className)}
+      aria-label={`${value.toFixed(1)} out of 5`}
+    >
+      {Array.from({ length: 5 }).map((_, i) => (
+        <IconStar key={i} size={size} filled={i < rounded} className={i < rounded ? "text-accent" : "text-border"} />
+      ))}
+    </span>
   );
 }
 

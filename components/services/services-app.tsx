@@ -212,7 +212,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
 
   const openNotifications = () => {
     setInboxOpen(true);
-    void notifications.load().then(() => notifications.markAllSeen());
+    void notifications.load();
   };
 
   // One bell, rendered into each tab's header (top-right) so alerts live in the
@@ -294,6 +294,9 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
         open={inboxOpen}
         onClose={() => setInboxOpen(false)}
         items={notifications.items}
+        unread={notifications.unread}
+        onMarkAllRead={() => void notifications.markAllSeen()}
+        onSeen={(id) => void notifications.markSeen([id])}
         onNavigate={handleNotificationNavigate}
       />
 
@@ -338,7 +341,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
       )}
 
       <Overlay open={reviewsOpen} onClose={() => setReviewsOpen(false)} title="My reviews">
-        <div className="mx-auto max-w-md p-4 pb-10">
+        <div className="mx-auto max-w-3xl p-4 pb-10">
           <ReviewsScreen />
         </div>
       </Overlay>

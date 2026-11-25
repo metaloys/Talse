@@ -7,7 +7,8 @@ import { backendApi } from "@/lib/backend-api";
 import { useServices } from "@/contexts/services-context";
 import { usePublicConfig } from "@/lib/public-config";
 import { track } from "@/lib/analytics";
-import { Button, Card, Pill } from "./ui";
+import { Button, Card, cx, Pill } from "./ui";
+import { IconBolt, IconShield } from "./icons";
 
 function formatDay(ms: number): string {
   return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -23,8 +24,12 @@ export function BoostListing({ listingId, boostedUntil }: { listingId: string; b
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "warning" | "danger">("success");
   const [activeUntil, setActiveUntil] = useState<number | null>(boostedUntil ?? null);
+  // Buying a boost is a money move, so it confirms before opening the Pi
+  // payment sheet rather than firing on a single tap.
+  const [confirm, setConfirm] = useState(false);
 
   const active = (activeUntil ?? 0) > Date.now();
+  const daysLeft = active ? Math.max(1, Math.ceil(((activeUntil ?? 0) - Date.now()) / 86_400_000)) : 0;
   const paymentReady = typeof window !== "undefined" && typeof window.Pi?.createPayment === "function";
   const unavailable = !accessToken || !paymentReady;
 
@@ -43,6 +48,7 @@ export function BoostListing({ listingId, boostedUntil }: { listingId: string; b
 
   const purchase = async () => {
     if (unavailable || busy || !accessToken) return;
+    setConfirm(false);
     setBusy(true);
     setMessage(null);
     let cancelled = false;
@@ -105,32 +111,62 @@ export function BoostListing({ listingId, boostedUntil }: { listingId: string; b
     }
   };
 
+  const benefit = `Top of Home and category feeds for ${boostDays} day${boostDays === 1 ? "" : "s"}.`;
+
   return (
     <Card className="border-accent/30 bg-accent-soft/35 p-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-bold text-foreground">Featured Listing Boost</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
-            Place this listing at the top of Home and Category feeds for {boostDays} days.
-          </p>
+        <div className="flex items-start gap-2.5">
+          <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-accent-soft text-accent-foreground">
+            <IconBolt size={18} />
+          </span>
+          <div>
+            <p className="text-sm font-bold text-foreground">Featured listing boost</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{benefit}</p>
+          </div>
         </div>
-        {active && <Pill tone="success">Boosted</Pill>}
+        {active ? <Pill tone="success">Boosted</Pill> : <Pill tone="neutral">{boostPrice} π</Pill>}
       </div>
-      <Button
-        className="mt-3 w-full"
-        variant="accent"
-        onClick={purchase}
-        disabled={unavailable || busy}
-      >
-        {busy
-          ? "Opening Pi payment…"
-          : active
-            ? `Extend boost · ${boostPrice} π`
-            : `Boost this listing · ${boostPrice} π`}
-      </Button>
+
       {active && activeUntil && (
-        <p className="mt-2 text-xs text-success">Active until {formatDay(activeUntil)}.</p>
+        <p className="mt-3 rounded-lg bg-success-soft px-2.5 py-1.5 text-xs font-medium text-success">
+          Active until {formatDay(activeUntil)} · {daysLeft} day{daysLeft === 1 ? "" : "s"} left
+        </p>
       )}
+
+      {confirm ? (
+        <div className="mt-3 space-y-2 rounded-xl border border-accent/40 bg-card/60 p-3 text-left">
+          <div className="flex items-start gap-2">
+            <IconShield size={16} className="mt-0.5 shrink-0 text-accent-foreground" />
+            <div>
+              <p className="text-xs font-semibold text-foreground">
+                {active ? "Extend" : "Boost"} this listing for {boostPrice} π?
+              </p>
+              <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                {benefit} The Pi is charged once when you confirm in the Pi payment sheet.
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button className="flex-1" variant="accent" onClick={() => void purchase()} disabled={busy}>
+              {busy ? "Opening Pi payment…" : `Confirm · ${boostPrice} π`}
+            </Button>
+            <Button className="flex-1" variant="outline" onClick={() => setConfirm(false)} disabled={busy}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <Button
+          className="mt-3 w-full"
+          variant="accent"
+          onClick={() => setConfirm(true)}
+          disabled={unavailable || busy}
+        >
+          {busy ? "Opening Pi payment…" : active ? `Extend boost · ${boostPrice} π` : `Boost this listing · ${boostPrice} π`}
+        </Button>
+      )}
+
       {!paymentReady && (
         <p className="mt-2 text-xs text-warning-foreground">Open {APP_NAME} in Pi Browser to buy a boost.</p>
       )}
@@ -138,21 +174,28 @@ export function BoostListing({ listingId, boostedUntil }: { listingId: string; b
         <p className="mt-2 text-xs text-warning-foreground">Sign in with Pi to buy a boost.</p>
       )}
       {message && (
-        <p className={`mt-2 text-xs ${tone === "success" ? "text-success" : tone === "warning" ? "text-warning-foreground" : "text-destructive"}`}>
+        <p
+          className={cx(
+            "mt-2 text-xs",
+            tone === "success" ? "text-success" : tone === "warning" ? "text-warning-foreground" : "text-destructive",
+          )}
+        >
           {message}
         </p>
       )}
-      <p className="mt-2 text-[11px] text-muted-foreground">Listing: {listingId.slice(0, 8)}… · One-time purchase</p>
+      <p className="mt-2 text-[11px] text-muted-foreground">One-time purchase · applies immediately after payment.</p>
     </Card>
   );
 }
 
 export function BoostConfirmation({ serviceId, onDone }: { serviceId: string; onDone: () => void }) {
   return (
-    <div className="mx-auto max-w-md space-y-4 p-4 pb-8">
+    <div className="mx-auto max-w-lg space-y-4 p-4 pb-8">
       <div className="rounded-2xl bg-primary-soft p-5 text-center">
         <p className="text-2xl font-bold text-primary">Service published</p>
-        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">Your listing is now available to Pioneers browsing {APP_NAME}.</p>
+        <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+          Your listing is now available to Pioneers browsing {APP_NAME}.
+        </p>
       </div>
       <BoostListing listingId={serviceId} />
       <Button variant="outline" className="w-full" onClick={onDone}>View my profile</Button>

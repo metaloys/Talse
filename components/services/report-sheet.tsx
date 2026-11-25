@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { useServices } from "@/contexts/services-context";
 import { Button, cx, Field, TextArea } from "./ui";
-import { IconFlag } from "./icons";
+import { IconCheck, IconFlag, IconShield } from "./icons";
 import { track } from "@/lib/analytics";
 
 type ReportTarget = "service" | "user" | "review";
@@ -25,6 +25,12 @@ const REASONS: Record<ReportTarget, string[]> = {
     "Something else",
   ],
   review: ["Abusive language", "Not a real transaction", "Spam", "Something else"],
+};
+
+const NOUN: Record<ReportTarget, string> = {
+  service: "listing",
+  user: "member",
+  review: "review",
 };
 
 const DETAILS_MAX = 600;
@@ -68,9 +74,11 @@ export function ReportSheet({
 
   if (!open) return null;
 
+  const noun = NOUN[targetType];
+
   const submit = async () => {
     if (!reason) {
-      setError("Choose what is wrong with this listing.");
+      setError(`Choose what is wrong with this ${noun}.`);
       return;
     }
     if (!accessToken) {
@@ -109,74 +117,97 @@ export function ReportSheet({
 
   return (
     <div
-      className="fixed inset-0 z-[78] flex items-end justify-center bg-black/40 ps-anim-fade-in"
+      className="fixed inset-0 z-[78] flex items-end justify-center bg-black/45 ps-anim-fade-in sm:items-center"
       onClick={() => (busy ? undefined : onClose())}
     >
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Report this listing"
-        className="ps-anim-slide-up w-full max-w-md rounded-t-3xl bg-card p-5 ps-safe-bottom"
+        aria-label={`Report this ${noun}`}
+        className="ps-anim-slide-up flex max-h-[92vh] w-full max-w-md flex-col overflow-hidden rounded-t-3xl bg-card shadow-xl sm:max-w-lg sm:rounded-3xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-2">
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-destructive-soft text-destructive">
-            <IconFlag size={17} />
+        <div className="flex items-start gap-2.5 border-b border-border px-5 pb-4 pt-5 ps-safe-top">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-destructive-soft text-destructive">
+            <IconFlag size={18} />
           </span>
-          <div className="min-w-0">
-            <h3 className="text-base font-bold text-foreground">Report this {targetType}</h3>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-base font-bold text-foreground">Report this {noun}</h3>
             {targetLabel && <p className="ps-clamp-1 text-xs text-muted-foreground">{targetLabel}</p>}
           </div>
         </div>
 
-        <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          Reports go to the {targetType === "user" ? "marketplace" : "listing"} review queue. Only you and our team can
-          see who filed it.
-        </p>
+        <div className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+          <div className="flex items-start gap-2 rounded-xl bg-secondary px-3 py-2.5 text-[11px] leading-relaxed text-muted-foreground">
+            <IconShield size={15} className="mt-0.5 shrink-0 text-primary" />
+            <p>
+              Reports are confidential. Only our trust &amp; safety team sees who filed it, and the report is reviewed
+              within 24 hours.
+            </p>
+          </div>
 
-        <div className="mt-4 flex flex-wrap gap-2" role="group" aria-label="Reason">
-          {REASONS[targetType].map((r) => (
-            <button
-              key={r}
-              type="button"
-              onClick={() => {
-                setReason(r);
-                setError(null);
-              }}
-              aria-pressed={reason === r}
-              className={cx(
-                "ps-press rounded-full border px-3 py-1.5 text-xs font-semibold",
-                reason === r
-                  ? "border-destructive bg-destructive-soft text-destructive"
-                  : "border-border bg-card text-foreground",
-              )}
+          <Field label="What's wrong?" htmlFor={`report-reason-${targetId}`}>
+            <div
+              id={`report-reason-${targetId}`}
+              className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+              role="group"
+              aria-label="Reason"
             >
-              {r}
-            </button>
-          ))}
-        </div>
+              {REASONS[targetType].map((r) => {
+                const selected = reason === r;
+                return (
+                  <button
+                    key={r}
+                    type="button"
+                    onClick={() => {
+                      setReason(r);
+                      setError(null);
+                    }}
+                    aria-pressed={selected}
+                    className={cx(
+                      "ps-press flex items-center justify-between gap-2 rounded-xl border px-3 py-2.5 text-left text-xs font-semibold transition-colors",
+                      selected
+                        ? "border-destructive bg-destructive-soft text-destructive"
+                        : "border-border bg-card text-foreground hover:bg-muted/50",
+                    )}
+                  >
+                    <span>{r}</span>
+                    {selected && <IconCheck size={14} className="shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+          </Field>
 
-        <div className="mt-4">
           <Field label="What happened? (optional)" counter={`${details.length}/${DETAILS_MAX}`}>
             <TextArea
               rows={3}
               maxLength={DETAILS_MAX}
               value={details}
               onChange={(e) => setDetails(e.target.value)}
-              placeholder="Add anything that helps us check this quickly."
+              placeholder="Add dates, amounts or anything that helps us check this quickly."
             />
           </Field>
+
+          {error && (
+            <p role="alert" className="rounded-lg bg-destructive-soft px-3 py-2 text-xs font-medium text-destructive">
+              {error}
+            </p>
+          )}
         </div>
 
-        {error && <p className="mt-3 text-xs font-medium text-destructive">{error}</p>}
-
-        <div className="mt-4 flex gap-2">
-          <Button variant="outline" className="flex-1" onClick={onClose} disabled={busy}>
-            Cancel
-          </Button>
-          <Button variant="danger" className="flex-1" onClick={() => void submit()} disabled={busy || !reason}>
-            {busy ? "Sending…" : "Send report"}
-          </Button>
+        <div className="border-t border-border px-5 py-4 ps-safe-bottom">
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={onClose} disabled={busy}>
+              Cancel
+            </Button>
+            <Button variant="danger" className="flex-1" onClick={() => void submit()} disabled={busy || !reason}>
+              {busy ? "Sending..." : "Send report"}
+            </Button>
+          </div>
+          <p className="mt-2 text-center text-[11px] text-muted-foreground">
+            False reports may affect your account. Only report real problems.
+          </p>
         </div>
       </div>
     </div>

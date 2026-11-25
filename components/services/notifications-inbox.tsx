@@ -1,12 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { useRealtimeClient } from "@/contexts/realtime-client-context";
 import { backendApi } from "@/lib/backend-api";
 import { Overlay } from "./feedback";
-import { EmptyState } from "./ui";
-import { IconCheckCircle, IconInbox } from "./icons";
+import { cx, EmptyState } from "./ui";
+import {
+  IconBolt,
+  IconCalendar,
+  IconInbox,
+  IconSend,
+  IconShield,
+  IconStar,
+  IconUser,
+  IconWallet,
+} from "./icons";
 
 export type Notice = {
   id: string;
@@ -30,6 +39,48 @@ function timeAgo(iso: string): string {
   const hours = Math.round(mins / 60);
   if (hours < 24) return `${hours}h ago`;
   return `${Math.round(hours / 24)}d ago`;
+}
+
+type NoticeTone = "primary" | "accent" | "success" | "warning" | "danger";
+
+const TONE_TILE: Record<NoticeTone, string> = {
+  primary: "bg-primary-soft text-primary",
+  accent: "bg-accent-soft text-accent-foreground",
+  success: "bg-success-soft text-success",
+  warning: "bg-warning-soft text-warning-foreground",
+  danger: "bg-destructive-soft text-destructive",
+};
+
+/**
+ * Notifications only carry a title, body, kind and `subroute`, so the icon and
+ * colour are derived from what the notice actually links to. That keeps the
+ * inbox scannable without a server-side taxonomy to maintain.
+ */
+function noticeMeta(n: Notice): { icon: ReactNode; tone: NoticeTone } {
+  const route = n.subroute || "";
+  const kind = (n.kind || "").toLowerCase();
+  if (route.startsWith("/messages") || kind.includes("message")) {
+    return { icon: <IconSend size={17} />, tone: "primary" };
+  }
+  if (kind.includes("payout") || kind.includes("payment") || kind.includes("escrow")) {
+    return { icon: <IconWallet size={17} />, tone: "success" };
+  }
+  if (kind.includes("boost")) {
+    return { icon: <IconBolt size={17} />, tone: "accent" };
+  }
+  if (kind.includes("review")) {
+    return { icon: <IconStar size={17} />, tone: "warning" };
+  }
+  if (kind.includes("dispute")) {
+    return { icon: <IconShield size={17} />, tone: "danger" };
+  }
+  if (kind.includes("offer") || kind.includes("request") || route.startsWith("/hire-requests")) {
+    return { icon: <IconCalendar size={17} />, tone: "primary" };
+  }
+  if (route.startsWith("/providers") || kind.includes("user")) {
+    return { icon: <IconUser size={17} />, tone: "accent" };
+  }
+  return { icon: <IconInbox size={17} />, tone: "primary" };
 }
 
 /**
@@ -69,6 +120,21 @@ export function useNotifications() {
     }
   }, [accessToken]);
 
+  const markSeen = useCallback(
+    async (ids: string[]) => {
+      if (!accessToken || ids.length === 0) return;
+      try {
+        await backendApi.notifications.markSeen(accessToken, { ids });
+        const now = new Date().toISOString();
+        setItems((prev) => prev.map((n) => (ids.includes(n.id) && !n.seen_at ? { ...n, seen_at: now } : n)));
+        setUnread((u) => Math.max(0, u - ids.length));
+      } catch (err) {
+        console.error("[Notifications] mark-seen failed:", err);
+      }
+    },
+    [accessToken],
+  );
+
   useEffect(() => {
     if (!accessToken) return;
     void load();
@@ -100,7 +166,7 @@ export function useNotifications() {
     };
   }, [realtimeClient, piUser?.uid, load]);
 
-  return { items, unread, load, markAllSeen };
+  return { items, unread, load, markAllSeen, markSeen };
 }
 
 /**
@@ -112,21 +178,43 @@ export function NotificationInbox({
   open,
   onClose,
   items,
+  unread = 0,
+  onMarkAllRead,
+  onSeen,
   onNavigate,
 }: {
   open: boolean;
   onClose: () => void;
   items: Notice[];
+  unread?: number;
+  onMarkAllRead?: () => void;
+  onSeen?: (id: string) => void;
   onNavigate?: (subroute: string) => void;
 }) {
   const handleTap = (n: Notice) => {
+    if (!n.seen_at) onSeen?.(n.id);
     onClose();
-    if (onNavigate) onNavigate(n.subroute);
+    if (n.subroute && onNavigate) onNavigate(n.subroute);
   };
 
   return (
-    <Overlay open={open} onClose={onClose} title="Notifications">
-      <div className="mx-auto max-w-md p-4 pb-10">
+    <Overlay
+      open={open}
+      onClose={onClose}
+      title="Notifications"
+      headerRight={
+        unread > 0 && onMarkAllRead ? (
+          <button
+            type="button"
+            onClick={onMarkAllRead}
+            className="ps-press shrink-0 rounded-full px-3 py-1.5 text-xs font-semibold text-primary"
+          >
+            Mark all read
+          </button>
+        ) : null
+      }
+    >
+      <div className="mx-auto max-w-2xl p-4 pb-10">
         {items.length === 0 ? (
           <EmptyState
             icon={<IconInbox size={26} />}
@@ -134,33 +222,48 @@ export function NotificationInbox({
             message="Updates about your requests, offers, messages and payouts will appear here."
           />
         ) : (
-          <ul className="space-y-2">
-            {items.map((n) => (
-              <li key={n.id}>
-                <button
-                  type="button"
-                  onClick={() => handleTap(n)}
-                  className="w-full rounded-2xl border border-border bg-card p-3.5 text-left transition-colors hover:bg-muted/40"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="mt-0.5 text-primary">
-                      <IconCheckCircle size={18} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="truncate text-sm font-semibold text-foreground">{n.title}</p>
-                        <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(n.created_at)}</span>
+          <>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+              {unread > 0 ? `${unread} unread` : "You're all caught up"}
+            </p>
+            <ul className="space-y-2">
+              {items.map((n) => {
+                const meta = noticeMeta(n);
+                const isUnread = !n.seen_at;
+                return (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleTap(n)}
+                      className={cx(
+                        "flex w-full items-start gap-3 rounded-2xl border p-3.5 text-left transition-colors",
+                        isUnread
+                          ? "border-primary/25 bg-primary-soft/30 hover:bg-primary-soft/50"
+                          : "border-border bg-card hover:bg-muted/40",
+                      )}
+                    >
+                      <span
+                        className={cx(
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
+                          TONE_TILE[meta.tone],
+                        )}
+                      >
+                        {meta.icon}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="truncate text-sm font-semibold text-foreground">{n.title}</p>
+                          <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(n.created_at)}</span>
+                        </div>
+                        <p className="mt-0.5 text-sm leading-relaxed text-muted-foreground">{n.body}</p>
                       </div>
-                      <p className="mt-0.5 text-sm text-muted-foreground">{n.body}</p>
-                    </div>
-                    {!n.seen_at && (
-                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />
-                    )}
-                  </div>
-                </button>
-              </li>
-            ))}
-          </ul>
+                      {isUnread && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" aria-hidden />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </>
         )}
       </div>
     </Overlay>

@@ -1,58 +1,51 @@
 "use client";
 
 import { usePiAuth } from "@/contexts/pi-auth-context";
+import { APP_NAME, APP_TAGLINE } from "@/lib/services/data";
+import { Button } from "@/components/services/ui";
+import { IconLogo, IconShield, IconSpinner } from "@/components/services/icons";
 
+/**
+ * First screen a Pioneer can see. It doubles as the Pi auth gate and the
+ * error/retry surface, so it stays deliberately calm and on-brand rather than
+ * a bare spinner: a failed handshake is the one moment a new user is most
+ * likely to bounce.
+ */
 export function AuthLoadingScreen() {
   const { authMessage, hasError, reinitialize } = usePiAuth();
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <div className="max-w-md w-full px-6 text-center space-y-6">
-        <div className="flex justify-center">
-          {hasError ? (
-            <div className="w-20 h-20 rounded-full bg-destructive/10 flex items-center justify-center">
-                <svg
-                className="w-10 h-10 text-destructive"
-                fill="none"
-                strokeWidth={2}
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"
-                />
-              </svg>
-            </div>
-          ) : (
-            <div className="relative">
-              <div className="w-20 h-20 rounded-full border-4 border-primary/20" />
-              <div className="absolute inset-0 w-20 h-20 rounded-full border-4 border-primary border-t-transparent animate-spin" />
-            </div>
-          )}
+    <div className="ps-hero-rich flex min-h-screen flex-col items-center justify-center px-6 ps-safe-top ps-safe-bottom">
+      <div className="flex w-full max-w-sm flex-col items-center text-center">
+        <div className="ps-anim-pop flex h-20 w-20 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-lg">
+          <IconLogo size={40} />
         </div>
+        <h1 className="mt-5 text-2xl font-extrabold tracking-tight text-foreground">{APP_NAME}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{APP_TAGLINE}</p>
 
-        <div className="space-y-2">
-          <h2 className="text-2xl font-semibold">
-            {hasError ? "Authentication Failed" : "Pi Network Authentication"}
-          </h2>
-          <p
-            className={`text-sm ${
-              hasError ? "text-destructive" : "text-muted-foreground"
-            }`}
-          >
-            {authMessage}
-          </p>
-        </div>
-
-        {hasError && (
-          <button
-            onClick={reinitialize}
-            className="px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors font-medium"
-          >
-            Retry Authentication
-          </button>
+        {hasError ? (
+          <div className="ps-anim-fade-up mt-8 w-full space-y-4 rounded-2xl border border-destructive/25 bg-card p-5 shadow-sm">
+            <div className="flex flex-col items-center gap-2">
+              <span className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive-soft text-destructive">
+                <IconShield size={24} />
+              </span>
+              <h2 className="text-base font-bold text-foreground">Couldn&apos;t sign you in</h2>
+              <p className="text-sm leading-relaxed text-muted-foreground">{authMessage}</p>
+            </div>
+            <Button className="w-full" size="lg" onClick={reinitialize}>
+              Try again
+            </Button>
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Open {APP_NAME} inside Pi Browser and make sure you&apos;re signed in to Pi, then try again.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-8 flex flex-col items-center gap-3">
+            <span className="text-primary">
+              <IconSpinner size={28} className="ps-anim-spin" />
+            </span>
+            <p className="text-sm text-muted-foreground">{authMessage || "Signing you in with Pi…"}</p>
+          </div>
         )}
       </div>
     </div>

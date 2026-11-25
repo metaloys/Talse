@@ -4,8 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { useServices } from "@/contexts/services-context";
 import { backendApi } from "@/lib/backend-api";
-import { timeAgo } from "@/lib/services/data";
-import { Button, Card, EmptyState, Field, Pill, TextArea } from "./ui";
+import { hueFromString, timeAgo } from "@/lib/services/data";
+import { Avatar, Button, Card, EmptyState, Field, Pill, Stars, TextArea } from "./ui";
+import { IconStar } from "./icons";
 import { track } from "@/lib/analytics";
 
 type ReviewRow = {
@@ -22,6 +23,22 @@ type ReviewRow = {
   hire_request?: { service_title?: string; serviceTitle?: string; title?: string; service?: { title?: string } } | null;
 };
 
+function serviceLabelFor(review: ReviewRow): string {
+  return (
+    review.service_title ??
+    review.serviceTitle ??
+    review.hire_request?.service_title ??
+    review.hire_request?.serviceTitle ??
+    review.hire_request?.title ??
+    review.hire_request?.service?.title ??
+    "Service review"
+  );
+}
+
+function reviewerNameFor(review: ReviewRow): string {
+  return review.reviewer_name ?? review.reviewer?.display_name ?? review.reviewer?.username ?? "Anonymous";
+}
+
 export function ReviewsScreen({ providerUid: explicitProviderUid }: { providerUid?: string }) {
   const { accessToken, piUser } = usePiAuth();
   const { requests } = useServices();
@@ -31,7 +48,6 @@ export function ReviewsScreen({ providerUid: explicitProviderUid }: { providerUi
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [state, setState] = useState<"idle" | "loading" | "success" | "error">("idle");
-  const [selected, setSelected] = useState<string | null>(null);
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
   const [profileSummary, setProfileSummary] = useState({ ratingAvg: 0, ratingCount: 0 });
   const [reviewsError, setReviewsError] = useState<string | null>(null);
@@ -80,6 +96,7 @@ export function ReviewsScreen({ providerUid: explicitProviderUid }: { providerUi
     void loadProfileSummary();
     void refreshReviews();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [providerUid]);
 
   const distribution = useMemo(() => {
@@ -88,7 +105,6 @@ export function ReviewsScreen({ providerUid: explicitProviderUid }: { providerUi
       count: reviews.filter((review) => Number(review.rating) === star).length,
     }));
   }, [reviews]);
-  const maxDistributionCount = Math.max(...distribution.map((item) => item.count), 1);
 
   const submit = async () => {
     if (!rating || comment.trim().length < 10) {
@@ -116,55 +132,70 @@ export function ReviewsScreen({ providerUid: explicitProviderUid }: { providerUi
   };
 
   return (
-    <div className="space-y-3">
-      <Card className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs text-muted-foreground">Reputation summary</p>
-            <p className="mt-1 text-xl font-bold text-foreground">{profileSummary.ratingAvg ? profileSummary.ratingAvg.toFixed(1) : "—"}</p>
-            <p className="mt-1 text-xs text-muted-foreground">{profileSummary.ratingCount} reviews</p>
+    <div className="space-y-4">
+      {/* summary */}
+      <Card className="p-4 sm:p-5">
+        <div className="flex flex-wrap items-center gap-5">
+          <div className="text-center">
+            <p className="text-4xl font-extrabold leading-none text-foreground ps-nums">
+              {profileSummary.ratingAvg ? profileSummary.ratingAvg.toFixed(1) : "—"}
+            </p>
+            <Stars value={profileSummary.ratingAvg} size={15} className="mt-2" />
+            <p className="mt-1 text-xs text-muted-foreground">
+              {profileSummary.ratingCount} review{profileSummary.ratingCount === 1 ? "" : "s"}
+            </p>
+          </div>
+          <div className="min-w-[180px] flex-1 space-y-1.5">
+            {distribution.map((item) => {
+              const pct = profileSummary.ratingCount
+                ? (item.count / profileSummary.ratingCount) * 100
+                : 0;
+              return (
+                <div key={item.star} className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <span className="w-3 text-right font-semibold text-foreground ps-nums">{item.star}</span>
+                  <IconStar size={11} filled className="text-accent" />
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-secondary">
+                    <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                  </div>
+                  <span className="w-6 text-right ps-nums">{item.count}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
-        <div className="mt-4 space-y-2">
-          {distribution.map((item) => (
-            <div key={item.star} className="flex items-center gap-2 text-[11px] text-muted-foreground">
-              <span className="w-5 text-right font-medium text-foreground">{item.star}</span>
-              <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
-                <div
-                  className="h-full rounded-full bg-primary"
-                  style={{ width: `${(item.count / maxDistributionCount) * 100}%` }}
-                />
-              </div>
-              <span className="w-4 text-right">{item.count}</span>
-            </div>
-          ))}
-        </div>
       </Card>
+
       {view === "write" && !isOwnProfile ? (
-        <Card className="space-y-4 p-4">
-          <div>
-            <h3 className="text-sm font-bold text-foreground">Write a review</h3>
-            <p className="mt-1 text-xs text-muted-foreground">Reviews are available after a completed job.</p>
+        <Card className="space-y-4 p-4 sm:p-5">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-bold text-foreground">Write a review</h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">Reviews are available after a completed job.</p>
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => setView("list")}>
+              Cancel
+            </Button>
           </div>
           {reviewed ? (
             <EmptyState title="Already reviewed" message="You have already submitted a review for this job." />
           ) : (
             <>
               <Field label="Rating" htmlFor="review-rating">
-                <div id="review-rating" className="flex gap-1" role="radiogroup" aria-label="Rating">
+                <div id="review-rating" className="flex items-center gap-1" role="radiogroup" aria-label="Rating">
                   {[1, 2, 3, 4, 5].map((value) => (
                     <button
                       key={value}
                       type="button"
                       role="radio"
                       aria-checked={rating === value}
+                      aria-label={`${value} star${value === 1 ? "" : "s"}`}
                       onClick={() => {
                         setRating(value);
                         setState("idle");
                       }}
-                      className="text-2xl text-primary"
+                      className="ps-press rounded-lg p-0.5"
                     >
-                      {value <= rating ? "★" : "☆"}
+                      <IconStar size={30} filled={value <= rating} className={value <= rating ? "text-accent" : "text-border"} />
                     </button>
                   ))}
                 </div>
@@ -195,7 +226,7 @@ export function ReviewsScreen({ providerUid: explicitProviderUid }: { providerUi
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setView("list")}>Cancel</Button>
                 <Button className="flex-1" disabled={state === "loading" || state === "success"} onClick={() => { void submit(); }}>
-                  {state === "loading" ? "Submitting…" : "Submit review"}
+                  {state === "loading" ? "Submitting..." : "Submit review"}
                 </Button>
               </div>
             </>
@@ -203,8 +234,10 @@ export function ReviewsScreen({ providerUid: explicitProviderUid }: { providerUi
         </Card>
       ) : (
         <>
-          <div className="flex items-center justify-between">
-            <h3 className="text-sm font-bold text-foreground">Reviews</h3>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="text-sm font-bold text-foreground">
+              Reviews{reviews.length > 0 ? ` (${reviews.length})` : ""}
+            </h3>
             {!isOwnProfile && (
               <Button size="sm" variant="outline" onClick={() => setView("write")}>Write review</Button>
             )}
@@ -215,31 +248,29 @@ export function ReviewsScreen({ providerUid: explicitProviderUid }: { providerUi
           {reviews.length === 0 ? (
             <EmptyState title="No reviews yet" message="Completed-job reviews will appear here." />
           ) : (
-            reviews.map((review) => {
-              const serviceLabel = review.service_title ?? review.serviceTitle ?? review.hire_request?.service_title ?? review.hire_request?.serviceTitle ?? review.hire_request?.title ?? review.hire_request?.service?.title ?? "Service review";
-              const reviewerName = review.reviewer_name ?? review.reviewer?.display_name ?? review.reviewer?.username ?? "Anonymous";
-              const createdAt = review.created_at ? new Date(review.created_at).getTime() : Date.now();
-              return (
-                <Card key={review.id} className="p-4">
-                  <button type="button" className="w-full text-left" onClick={() => setSelected(selected === review.id ? null : review.id)}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{reviewerName}</p>
-                        <p className="text-xs text-muted-foreground">{serviceLabel}</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {reviews.map((review) => {
+                const reviewerName = reviewerNameFor(review);
+                const createdAt = review.created_at ? new Date(review.created_at).getTime() : Date.now();
+                return (
+                  <Card key={review.id} className="flex flex-col gap-2 p-4">
+                    <div className="flex items-center gap-2.5">
+                      <Avatar name={reviewerName} hue={hueFromString(reviewerName)} size={36} />
+                      <div className="min-w-0 flex-1">
+                        <p className="ps-clamp-1 text-sm font-semibold text-foreground">{reviewerName}</p>
+                        <p className="ps-clamp-1 text-xs text-muted-foreground">{serviceLabelFor(review)}</p>
                       </div>
-                      <span className="text-primary">{review.rating ? `${"★".repeat(review.rating)}${"☆".repeat(5 - review.rating)}` : "Not rated"}</span>
+                      <span className="shrink-0 text-[11px] text-muted-foreground">{timeAgo(createdAt)}</span>
                     </div>
-                    <p className="mt-2 text-sm text-foreground">{review.text || "No comment left."}</p>
-                    <p className="mt-2 text-[11px] text-muted-foreground">{timeAgo(createdAt)}</p>
-                  </button>
-                  {selected === review.id && (
-                    <div className="mt-3 border-t border-border pt-3 text-xs text-muted-foreground">
-                      <p>Reviewed {timeAgo(createdAt)}</p>
-                    </div>
-                  )}
-                </Card>
-              );
-            })
+                    <Stars value={Number(review.rating) || 0} size={13} />
+                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                      {review.text || "No comment left."}
+                    </p>
+                    {Number(review.rating) >= 5 && <Pill tone="success" className="self-start text-[10px]">Top rated</Pill>}
+                  </Card>
+                );
+              })}
+            </div>
           )}
         </>
       )}

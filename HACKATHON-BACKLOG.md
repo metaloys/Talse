@@ -86,10 +86,6 @@ Goal: retire the "two apps" problem — the new Home/Search sat beside old narro
       escrow financial summary, admin card beside it, and a two-up services
       grid with hover lift.
 
-Tier 2 (service detail, provider profile, hire/escrow, create-service live
-preview) and Tier 3 (reviews, notifications, dispute/report/boost, auth,
-shared primitives) remain.
-
 ## App-wide redesign — Tier 2: detail, provider, hire, create (done)
 
 Goal: make the conversion path — viewing, trusting, hiring and listing — feel
@@ -113,8 +109,34 @@ like a real marketplace at every step.
       "Show live preview" toggle on mobile) renders the exact listing card from
       the form as you type.
 
-Tier 3 (reviews, notifications, dispute/report/boost, auth, shared primitives)
-remains.
+## App-wide redesign — Tier 3: reviews, notifications, trust, auth (done)
+
+Goal: close the remaining surfaces so the app reads as a finished product —
+readable reviews, a real inbox, careful money/trust flows, and a calm first
+screen.
+
+- [x] **Reviews** — rating summary card with a 5→1 distribution bar chart, a
+      proper write-review flow (10-character minimum, live counter, success and
+      error states), and a two-up review card grid with avatars and "Top rated"
+      badges.
+- [x] **Notifications** — bell + inbox now share one `useNotifications()` hook
+      with per-item read, "Mark all read", live Realtime delivery and a 45 s
+      poll fallback; every notice gets an icon/tone derived from its `subroute`
+      and kind, plus unread styling and a relative timestamp.
+- [x] **Report sheet** — bottom sheet on mobile / centred dialog on desktop,
+      selectable reason rows with a check mark, a confidentiality note, a
+      "false reports may affect your account" footer and a clear Send/Cancel.
+- [x] **Disputes** — `max-w-2xl` layout, escrow-frozen explainer, per-dispute
+      cards with amount held, reason, admin note and a Filed → Under review →
+      Resolved timeline; the create form warns that filing freezes the escrow.
+- [x] **Boost** — buying or extending a boost confirms inline (benefit, price,
+      "charged once in the Pi payment sheet") before opening `Pi.createPayment`;
+      active boosts show an "Active until …" chip with days left.
+- [x] **Auth / loading** — on-brand `ps-hero-rich` first screen with the logo,
+      tagline, spinner and auth message; a failed Pi handshake becomes a clear
+      "Couldn't sign you in" card with a Try again button and Pi Browser hint.
+- [x] **Shared primitives** — new read-only `Stars` primitive in `ui.tsx` used
+      by reviews and profiles, keeping rating rendering consistent app-wide.
 
 ## Later / external
 
