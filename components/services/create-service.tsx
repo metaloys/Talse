@@ -21,6 +21,7 @@ import { track } from "@/lib/analytics";
 import { Overlay } from "./feedback";
 import { Button, Card, cx, Field, IconButton, Select, TextArea, TextInput } from "./ui";
 import { CategoryIcon, IconImage, IconPlus, IconTrash } from "./icons";
+import { ServiceCard } from "./service-card";
 
 export function CreateService({
   open,
@@ -45,6 +46,7 @@ export function CreateService({
   const [showErrors, setShowErrors] = useState(false);
   const [lastOpen, setLastOpen] = useState(false);
   const [processingImages, setProcessingImages] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
 
   useEffect(() => {
     if (!open) {
@@ -154,10 +156,42 @@ export function CreateService({
     }
   };
 
+  // Live preview: the exact card Pioneers will see, built from what's typed so
+  // far. Empty fields fall back to friendly placeholders.
+  const previewService: Service = {
+    id: editing?.id ?? "preview",
+    ownerId: "me",
+    ownerName: "You",
+    title: title.trim() || "Your service title",
+    category,
+    description: description.trim() || "Your description will appear here.",
+    price: priceValue,
+    deliveryId,
+    images,
+    coverImage: images[0],
+    active: true,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  const previewCard = (
+    <ServiceCard service={previewService} onOpen={() => {}} className="w-full cursor-default" />
+  );
+
   return (
     <Overlay open={open} onClose={onClose} title={editing ? "Edit service" : "Create service"}>
-      <div className="mx-auto max-w-md space-y-4 p-4 pb-28">
-        <Field label="Title" htmlFor="svc-title" error={showErrors ? titleError : undefined} counter={`${title.length}/${TITLE_MAX}`}>
+      <div className="mx-auto max-w-5xl p-4 pb-28">
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:items-start lg:gap-6">
+          <div className="space-y-4">
+            <button
+              type="button"
+              onClick={() => setShowPreview((v) => !v)}
+              className="ps-press flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-primary/40 bg-primary-soft px-3 py-2 text-xs font-semibold text-primary lg:hidden"
+            >
+              {showPreview ? "Hide live preview" : "Show live preview"}
+            </button>
+            {showPreview && <div className="lg:hidden">{previewCard}</div>}
+
+            <Field label="Title" htmlFor="svc-title" error={showErrors ? titleError : undefined} counter={`${title.length}/${TITLE_MAX}`}>
           <TextInput
             id="svc-title"
             placeholder="e.g. Modern logo design"
@@ -288,10 +322,22 @@ export function CreateService({
             </div>
           )}
         </Field>
+          </div>
+
+          <aside className="mt-4 hidden lg:mt-0 lg:block">
+            <div className="sticky top-4 space-y-2">
+              <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">Live preview</p>
+              {previewCard}
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                This is how your listing appears to Pioneers on Talse.
+              </p>
+            </div>
+          </aside>
+        </div>
       </div>
 
       <div className="fixed inset-x-0 bottom-0 z-10 border-t border-border bg-card/95 px-4 py-3 ps-safe-bottom backdrop-blur">
-        <div className="mx-auto max-w-md">
+        <div className="mx-auto max-w-5xl lg:grid lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-6">
           <Button className="w-full" size="lg" onClick={submit}>
             {editing ? "Save changes" : "Publish service"}
           </Button>

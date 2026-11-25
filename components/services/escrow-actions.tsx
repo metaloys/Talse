@@ -8,7 +8,8 @@ import { getOrCreateRecovery, waitForAllRecoveries } from "@/lib/recovery-guard"
 import { getFrontendPlatformFeePercent, calcPlatformFee, BLOCKCHAIN_GAS_LABEL } from "@/lib/frontend-fee-config";
 import { formatPi, type HireRequest } from "@/lib/services/data";
 import { track } from "@/lib/analytics";
-import { Button } from "./ui";
+import { Button, Card } from "./ui";
+import { IconCheck, IconShield, IconWallet } from "./icons";
 
 const STUCK_PAYMENT_AGE_MS = 60_000;
 
@@ -70,6 +71,10 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
   const [disputeReason, setDisputeReason] = useState("");
   const [disputeDetails, setDisputeDetails] = useState("");
   const [disputeEvidence, setDisputeEvidence] = useState("");
+  // Money moves are never one click: paying into escrow and releasing funds
+  // both expand an explicit confirmation receipt first.
+  const [confirmPay, setConfirmPay] = useState(false);
+  const [confirmRelease, setConfirmRelease] = useState(false);
 
   const inspectStuckPayment = async (silent = false) => {
     if (!accessToken) return null;
@@ -152,37 +157,90 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
           </div>
         ) : null}
 
-        <div className="text-xs text-muted-foreground">
-          {(() => {
-            const pct = getFrontendPlatformFeePercent();
-            const fee = calcPlatformFee(req.servicePrice, pct);
-            const receive = Math.round((req.servicePrice - fee) * 100) / 100;
-            return `Platform fee (${Math.round(pct * 100)}%): -${formatPi(fee)} · Provider receives: ${formatPi(receive)} · ${BLOCKCHAIN_GAS_LABEL}`;
-          })()}
-        </div>
-        <Button
-          size="sm"
-          className="w-full"
-          disabled={busy}
-          onClick={() =>
-            withBusy(async () => {
-              if (recoveryInProgress) {
-                pushToast("Resolving a previous payment, try again in a moment", "warning");
-                return;
-              }
-              await payIntoEscrow(req, accessToken);
-              track("payment_escrowed", {
-                request_id: req.id,
-                amount: req.servicePrice,
-                service_id: req.serviceId,
-              });
-              await refreshRequests();
-              pushToast("Payment locked in escrow", "success");
-            })
-          }
-        >
-          {busy ? "Processing…" : `Pay ${req.servicePrice} Pi to start`}
-        </Button>
+        {(() => {
+          const pct = getFrontendPlatformFeePercent();
+          const fee = calcPlatformFee(req.servicePrice, pct);
+          const receive = Math.round((req.servicePrice - fee) * 100) / 100;
+          return (
+            <Card className="w-full p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground">Lock in escrow</span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-primary">
+                  <IconShield size={11} />
+                  Escrow
+                </span>
+              </div>
+              <div className="mt-2 space-y-1 text-[11px]">
+                <div className="flex items-center justify-between text-foreground">
+                  <span>Held until you approve delivery</span>
+                  <span className="font-semibold text-primary ps-nums">{formatPi(req.servicePrice)}</span>
+                </div>
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Platform fee ({Math.round(pct * 100)}%)</span>
+                  <span className="ps-nums">-{formatPi(fee)} from payout</span>
+                </div>
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span>Provider receives on release</span>
+                  <span className="font-medium text-foreground ps-nums">{formatPi(receive)}</span>
+                </div>
+                <p className="border-t border-border pt-1.5 text-[10px] text-muted-foreground">{BLOCKCHAIN_GAS_LABEL}</p>
+              </div>
+            </Card>
+          );
+        })()}
+        {confirmPay ? (
+          <div className="w-full space-y-2 rounded-xl border border-primary/30 bg-primary-soft/50 p-3 text-left">
+            <div className="flex items-start gap-2">
+              <IconWallet size={16} className="mt-0.5 shrink-0 text-primary" />
+              <div>
+                <p className="text-xs font-semibold text-foreground">
+                  Lock {formatPi(req.servicePrice)} in escrow?
+                </p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                  Your Pi stays locked until you confirm delivery. You can dispute before releasing.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                className="flex-1"
+                disabled={busy}
+                onClick={() =>
+                  withBusy(async () => {
+                    if (recoveryInProgress) {
+                      pushToast("Resolving a previous payment, try again in a moment", "warning");
+                      return;
+                    }
+                    setConfirmPay(false);
+                    await payIntoEscrow(req, accessToken);
+                    track("payment_escrowed", {
+                      request_id: req.id,
+                      amount: req.servicePrice,
+                      service_id: req.serviceId,
+                    });
+                    await refreshRequests();
+                    pushToast("Payment locked in escrow", "success");
+                  })
+                }
+              >
+                {busy ? "Processing…" : `Confirm & pay ${formatPi(req.servicePrice)}`}
+              </Button>
+              <Button variant="outline" size="sm" className="flex-1" disabled={busy} onClick={() => setConfirmPay(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            size="sm"
+            className="w-full"
+            disabled={busy}
+            onClick={() => setConfirmPay(true)}
+          >
+            {busy ? "Processing…" : `Pay ${formatPi(req.servicePrice)} to start`}
+          </Button>
+        )}
 
         <button
           type="button"
@@ -217,27 +275,59 @@ export function EscrowActions({ req, onReleased }: { req: HireRequest; onRelease
   if (req.direction === "outgoing" && req.status === "delivered") {
     return (
       <div className="flex flex-col gap-2">
-        <Button
-          variant="success"
-          size="sm"
-          className="w-full"
-          disabled={busy}
-          onClick={() =>
-            withBusy(async () => {
-              await backendApi.hireRequests.release(req.id, accessToken);
-              track("payment_released", {
-                request_id: req.id,
-                amount: req.servicePrice,
-                service_id: req.serviceId,
-              });
-              await refreshRequests();
-              pushToast("Funds released to provider", "success");
-              if (onReleased) onReleased(req);
-            })
-          }
-        >
-          {busy ? "Releasing…" : "Confirm & release payment"}
-        </Button>
+        {confirmRelease ? (
+          <div className="w-full space-y-2 rounded-xl border border-success/40 bg-success-soft/60 p-3 text-left">
+            <div className="flex items-start gap-2">
+              <IconCheck size={16} className="mt-0.5 shrink-0 text-success" />
+              <div>
+                <p className="text-xs font-semibold text-foreground">
+                  Release {formatPi(req.servicePrice)} to the provider?
+                </p>
+                <p className="mt-0.5 text-[11px] leading-relaxed text-muted-foreground">
+                  This moves the escrowed Pi out of escrow for good. Only do this once you&apos;ve received the work and
+                  are happy with it.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="success"
+                size="sm"
+                className="flex-1"
+                disabled={busy}
+                onClick={() =>
+                  withBusy(async () => {
+                    setConfirmRelease(false);
+                    await backendApi.hireRequests.release(req.id, accessToken);
+                    track("payment_released", {
+                      request_id: req.id,
+                      amount: req.servicePrice,
+                      service_id: req.serviceId,
+                    });
+                    await refreshRequests();
+                    pushToast("Funds released to provider", "success");
+                    if (onReleased) onReleased(req);
+                  })
+                }
+              >
+                {busy ? "Releasing…" : "Yes, release payment"}
+              </Button>
+              <Button variant="outline" size="sm" className="flex-1" disabled={busy} onClick={() => setConfirmRelease(false)}>
+                Not yet
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            variant="success"
+            size="sm"
+            className="w-full"
+            disabled={busy}
+            onClick={() => setConfirmRelease(true)}
+          >
+            {busy ? "Releasing…" : "Confirm & release payment"}
+          </Button>
+        )}
         {showDisputeForm ? (
           <div className="flex w-full flex-col gap-2 rounded-xl border border-border bg-secondary/30 p-3">
             <div className="text-xs font-semibold text-foreground">Submit dispute</div>

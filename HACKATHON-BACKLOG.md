@@ -90,6 +90,32 @@ Tier 2 (service detail, provider profile, hire/escrow, create-service live
 preview) and Tier 3 (reviews, notifications, dispute/report/boost, auth,
 shared primitives) remain.
 
+## App-wide redesign — Tier 2: detail, provider, hire, create (done)
+
+Goal: make the conversion path — viewing, trusting, hiring and listing — feel
+like a real marketplace at every step.
+
+- [x] **Service detail** — `max-w-5xl`; desktop splits the gallery (left) from
+      the details (right), the real listing title now titles the screen, an
+      escrow "Payment breakdown" receipt (held / fee / provider receives / gas),
+      a provider row that opens their profile, a three-up trust strip, and a
+      wider sticky Hire bar.
+- [x] **Provider profile** — gradient hero with avatar, join date, earnings
+      badge and location; a Rating / Jobs / Success stat row; a two-up services
+      grid of real listing cards; and a reviews panel with a rating
+      distribution plus recent reviews.
+- [x] **Hire flow** — two clear steps (Describe → Review & send) with a
+      progress stepper; the review step shows an explicit escrow receipt and
+      "you pay today: 0 π" so nothing is charged until the provider accepts.
+- [x] **Escrow flow** — paying into escrow and releasing funds are no longer
+      one click: each expands an inline confirmation receipt first.
+- [x] **Create service** — a live preview column on desktop (and a
+      "Show live preview" toggle on mobile) renders the exact listing card from
+      the form as you type.
+
+Tier 3 (reviews, notifications, dispute/report/boost, auth, shared primitives)
+remains.
+
 ## Later / external
 
 - [ ] Mainnet A2U payout access (apply + verify).
