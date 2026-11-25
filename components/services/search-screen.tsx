@@ -140,8 +140,8 @@ export function SearchScreen({
   };
 
   return (
-    <div className="mx-auto max-w-md pb-24">
-      <div className="ps-hero-grad px-4 pb-4 pt-4 ps-safe-top">
+    <div className="mx-auto max-w-6xl pb-24">
+      <div className="ps-hero-grad px-4 pb-4 pt-4 ps-safe-top sm:px-6">
         <div className="flex items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-foreground">Find services</h1>
           {headerAction}
@@ -268,7 +268,7 @@ export function SearchScreen({
             message="Try a different keyword or adjust your filters."
           />
         ) : (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {results.map((s) => (
               <ServiceCard key={s.id} service={s} onOpen={() => onOpenService(s)} />
             ))}

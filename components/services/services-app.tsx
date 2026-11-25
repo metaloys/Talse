@@ -230,6 +230,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
           onOpenCategory={openCategory}
           onCreate={openCreate}
           onSeeAll={seeAll}
+          onSearch={seeAll}
           headerAction={notificationBell}
         />
       )}

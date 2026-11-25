@@ -23,6 +23,11 @@ Working list for the "top 2" push. Grouped by impact. Everything below is on
       `navigator.share` / clipboard fallbacks; reports which path was used.
 - [x] Share buttons on service detail, provider profile, completed job
       ("Share receipt") and own profile.
+- [x] **Share always yields a link.** Tapping Share opens an in-app sheet with the
+      full link, a **Copy link** button, and a native "Share with Pi"/"Share…"
+      button when one exists. Fixes: the sandbox's `Pi.openShareDialog` resolves
+      without showing anything, so the old code toasted "Shared" while the user
+      got nothing. See `components/services/share-button.tsx`.
 - [x] `/services/[id]` deep link so shared listings resolve, with OpenGraph
       metadata for chat previews.
 - [x] `/providers/[id]` deep link + `GET /api/providers/[id]` so a shared
@@ -44,6 +49,25 @@ Working list for the "top 2" push. Grouped by impact. Everything below is on
       `/api/messages/read`) with a Messages-tab badge and per-thread dots;
       merge-by-id refresh + 15 s thread poll + refresh-on-focus; removed the dead
       legacy conversation model.
+
+## Home / Feed redesign — marketplace-ready (done)
+
+Goal: make the first screen sell the marketplace so a new Pioneer starts doing
+business on day one.
+
+- [x] **Search-forward hero** — value prop ("Hire Pi talent. Get real work done."),
+      one-line promise, a prominent search bar that jumps to Search, and
+      scrollable category chips.
+- [x] **Trust band** — one deep violet surface stating the deal up front:
+      Escrow-safe · Paid in Pi · Real reviews, plus live listing/Pioneer counts.
+- [x] **Featured spotlight + rails** — full-width featured card (dark gradient,
+      rating, provider, price, delivery) and Promoted / "Fresh on Talse"
+      horizontal rails instead of a flat grid dump.
+- [x] **Cards that sell** — provider avatar + name, ⭐ rating + review count,
+      "N done", price and delivery; hover lift on desktop.
+- [x] **Empty state** — "Be a founding provider" with a create CTA.
+- [x] **Responsive shell** — `max-w-6xl`; Browse rows go two-up, Search results
+      2/3/4-up. Mobile (Pi Browser) stays the primary target.
 
 ## Later / external
 
