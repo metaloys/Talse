@@ -14,11 +14,36 @@ export const PI_API_BASE = PI_PLATFORM_API_BASE;
 export const PI_SANDBOX_API_BASE = process.env.PI_SANDBOX_API_BASE ?? PI_TESTNET_BLOCKCHAIN_API_BASE;
 export const PI_PRODUCTION_API_BASE = process.env.PI_PRODUCTION_API_BASE ?? PI_PLATFORM_API_BASE;
 
+// Network id + Horizon endpoint used to *sign and submit* app_to_user (escrow
+// release / refund) transactions. Testnet is the default so current behaviour is
+// unchanged; a Production (Mainnet) deployment must set both explicitly. Pi
+// Mainnet's passphrase is "Pi Network" and its Horizon base is the Mainnet host.
+export const PI_NETWORK_PASSPHRASE = process.env.PI_NETWORK_PASSPHRASE ?? "Pi Testnet";
+export const PI_HORIZON_URL = process.env.PI_HORIZON_URL ?? PI_TESTNET_BLOCKCHAIN_API_BASE;
+
+// Exported for the RPC/verification helpers that speak to the same network.
+export const PI_RPC_URL = process.env.PI_RPC_URL ?? "https://rpc.testnet.minepi.com";
+
+const PI_MAINNET_PASSPHRASE = "Pi Network";
+
 export function getPiSandboxMode(): boolean {
   if (sandboxOverride !== undefined) return sandboxOverride === "true";
   if (explicitEnv === "sandbox") return true;
   if (explicitEnv === "production") return false;
   return process.env.NODE_ENV !== "production";
+}
+
+/**
+ * Guard for money-out: on Production the network must actually be Pi Mainnet,
+ * otherwise a signed transaction could never settle (wrong network id) and the
+ * platform would silently strand buyer Pi in escrow. No-op on Sandbox/Testnet.
+ */
+export function assertPayoutNetworkConfigured(): void {
+  if (!getPiSandboxMode() && PI_NETWORK_PASSPHRASE !== PI_MAINNET_PASSPHRASE) {
+    throw new Error(
+      `Refusing to send payouts: production mode requires PI_NETWORK_PASSPHRASE="${PI_MAINNET_PASSPHRASE}" and a Mainnet PI_HORIZON_URL (got passphrase "${PI_NETWORK_PASSPHRASE}").`,
+    );
+  }
 }
 
 export function getPiApiBase(): string {

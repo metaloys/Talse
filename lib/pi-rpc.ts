@@ -8,7 +8,7 @@ function asString(value: unknown): string | null {
   return null;
 }
 
-export const PI_TESTNET_RPC_URL = "https://rpc.testnet.minepi.com";
+export const PI_TESTNET_RPC_URL = process.env.PI_RPC_URL ?? "https://rpc.testnet.minepi.com";
 export const PI_TESTNET_NETWORK_PASSPHRASE = "Pi Testnet";
 
 export type PiRpcHealthResponse = {

@@ -1,16 +1,16 @@
-import { Horizon, Keypair, TransactionBuilder, Networks, Operation, Asset, Memo } from "@stellar/stellar-sdk";
-import { PI_TESTNET_BLOCKCHAIN_API_BASE } from "@/lib/pi-env";
-
-// Testnet-only network passphrase for Pi
-const NETWORK_PASSPHRASE = "Pi Testnet";
-const HORIZON_URL = PI_TESTNET_BLOCKCHAIN_API_BASE;
+import { Horizon, Keypair, TransactionBuilder, Operation, Asset, Memo } from "@stellar/stellar-sdk";
+import { PI_HORIZON_URL, PI_NETWORK_PASSPHRASE, assertPayoutNetworkConfigured } from "@/lib/pi-env";
 
 export async function submitA2UPayment(payment: any, seed: string): Promise<string> {
   if (!seed) throw new Error("PI_APP_WALLET_SEED is not configured");
 
+  // Refuse to sign a payout the configured network cannot settle (e.g. a
+  // Production run still pointed at the Testnet passphrase). No-op on Testnet.
+  assertPayoutNetworkConfigured();
+
   // Derive keypair from seed (do NOT log the seed or keypair)
   const keypair = Keypair.fromSecret(seed);
-  const server = new Horizon.Server(HORIZON_URL);
+  const server = new Horizon.Server(PI_HORIZON_URL);
 
   // Determine recipient address from the payment object. We don't assume
   // Use the explicitly-verified field `to_address` returned by Pi Platform.
@@ -30,7 +30,7 @@ export async function submitA2UPayment(payment: any, seed: string): Promise<stri
 
   const txb = new TransactionBuilder(account, {
     fee: "1000000",
-    networkPassphrase: NETWORK_PASSPHRASE,
+    networkPassphrase: PI_NETWORK_PASSPHRASE,
   })
     .addOperation(Operation.payment({
       destination: recipient,
