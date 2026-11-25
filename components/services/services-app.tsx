@@ -6,6 +6,7 @@ import type { CategoryId, Service, TabId } from "@/lib/services/data";
 import { ServicesProvider, useServices } from "@/contexts/services-context";
 import { LoadingScreen, Overlay, StorageNotice, ToastHost } from "./feedback";
 import { BottomNav } from "./bottom-nav";
+import { TopNav } from "./top-nav";
 import { HomeScreen } from "./home-screen";
 import { NotificationInbox, useNotifications } from "./notifications-inbox";
 import { useUnreadMessages } from "./use-unread-messages";
@@ -218,11 +219,23 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
   // top bar like the rest of the Pi app ecosystem and the bottom nav keeps its
   // five primary destinations.
   const notificationBell = <NotificationBell unread={notifications.unread} onClick={openNotifications} />;
+  // On desktop the bell lives in TopNav, so the per-screen copy is hidden from
+  // `lg` up to avoid showing two bells.
+  const headerAction = <span className="lg:hidden">{notificationBell}</span>;
 
   return (
     <div className="min-h-screen bg-background">
       <StorageNotice show={storageTrouble} />
       <ToastHost toasts={toasts} onDismiss={dismissToast} />
+
+      <TopNav
+        active={tab}
+        onChange={setTab}
+        activityCount={incoming.filter((r) => r.status === "pending").length}
+        messagesUnreadCount={unreadMessages.total}
+        bell={notificationBell}
+        onCreate={openCreate}
+      />
 
       {tab === "home" && (
         <HomeScreen
@@ -231,7 +244,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
           onCreate={openCreate}
           onSeeAll={seeAll}
           onSearch={seeAll}
-          headerAction={notificationBell}
+          headerAction={headerAction}
         />
       )}
       {tab === "search" && (
@@ -239,7 +252,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
           presetCategory={presetCategory}
           presetNonce={presetNonce}
           onOpenService={openService}
-          headerAction={notificationBell}
+          headerAction={headerAction}
         />
       )}
       {tab === "activity" && (
@@ -248,13 +261,13 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
           initialOpenRequestId={initialOpenRequestId}
           onOpenMessages={(requestId) => { setMessagesDeepLinkId(requestId); setTab("messages"); }}
           onViewDispute={(requestId) => { setDisputeRequestId(requestId); setDisputesOpen(true); }}
-          headerAction={notificationBell}
+          headerAction={headerAction}
         />
       )}
       {tab === "messages" && (
         <MessagesScreen
           initialRequestId={messagesDeepLinkId ?? undefined}
-          headerAction={notificationBell}
+          headerAction={headerAction}
           unreadByRequest={unreadMessages.byRequest}
           onRead={unreadMessages.refresh}
         />
@@ -266,7 +279,7 @@ function AppInner({ initialDeepLink }: { initialDeepLink?: AppDeepLink | null })
           onOpenService={openService}
           onOpenReviews={() => setReviewsOpen(true)}
           onOpenAdmin={() => setAdminOpen(true)}
-          headerAction={notificationBell}
+          headerAction={headerAction}
         />
       )}
 

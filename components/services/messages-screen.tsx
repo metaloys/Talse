@@ -115,28 +115,31 @@ export function MessagesScreen({
   };
 
   return (
-    <div className="mx-auto max-w-md pb-24">
-      <header className="ps-hero-grad px-4 pb-4 pt-4 ps-safe-top">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="ps-eyebrow">Private workspaces</p>
-            <h1 className="mt-1 text-2xl font-bold text-foreground">Messages</h1>
+    <div className="mx-auto max-w-6xl pb-24 lg:pb-14">
+      <header className="ps-hero-rich ps-safe-top">
+        <div className="px-4 pb-4 pt-4 sm:px-6">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="ps-eyebrow text-primary">Private workspaces</p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground">Messages</h1>
+            </div>
+            {headerAction}
           </div>
-          {headerAction}
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+            One private conversation per hire request. Only you and the other person can read it.
+          </p>
+          <button
+            type="button"
+            onClick={() => setHelpOpen(true)}
+            className="ps-press mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary"
+          >
+            <IconShield size={13} /> How messaging works
+          </button>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">
-          One private conversation per hire request. Only you and the other person can read it.
-        </p>
-        <button
-          type="button"
-          onClick={() => setHelpOpen(true)}
-          className="ps-press mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-primary"
-        >
-          <IconShield size={13} /> How messaging works
-        </button>
       </header>
-      <div className="grid gap-3 px-4 pt-4">
-        {accepted.length === 0 ? (
+
+      {accepted.length === 0 ? (
+        <div className="px-4 pt-6 sm:px-6">
           <EmptyState
             icon={<IconInbox size={26} />}
             title="No conversations yet"
@@ -147,12 +150,17 @@ export function MessagesScreen({
               </Button>
             }
           />
-        ) : (
-          <>
-            <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        </div>
+      ) : (
+        <div className="px-4 pt-5 sm:px-6 lg:grid lg:grid-cols-[340px_minmax(0,1fr)] lg:items-start lg:gap-6">
+          <div>
+            <p className="mb-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
               <IconShield size={12} /> Private · one thread per hire request
             </p>
-            <div className="space-y-2" aria-label="Conversation list">
+            <div
+              className="space-y-2 lg:max-h-[calc(100vh-13rem)] lg:overflow-y-auto lg:pr-1"
+              aria-label="Conversation list"
+            >
               {accepted.map((request) => (
                 <ConversationRow
                   key={request.id}
@@ -167,7 +175,12 @@ export function MessagesScreen({
                 />
               ))}
             </div>
-            {selected && (
+          </div>
+
+          {/* On desktop the thread is its own sticky pane beside the list; on
+              mobile it sits below the list, opened by tapping a conversation. */}
+          <div className={cx("mt-4 lg:mt-0 lg:sticky lg:top-20", !selected && "hidden lg:block")}>
+            {selected ? (
               <ConversationView
                 request={selected}
                 messages={messagesForRequest(selected.id)}
@@ -180,10 +193,18 @@ export function MessagesScreen({
                 setFiles={setFiles}
                 uploading={uploading}
               />
+            ) : (
+              <div className="rounded-2xl border border-dashed border-border bg-card/50 p-10 text-center">
+                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-secondary text-muted-foreground">
+                  <IconInbox size={22} />
+                </div>
+                <p className="text-sm font-semibold text-foreground">Select a conversation</p>
+                <p className="mt-1 text-xs text-muted-foreground">Pick a thread on the left to read and reply.</p>
+              </div>
             )}
-          </>
-        )}
-      </div>
+          </div>
+        </div>
+      )}
 
       <Overlay open={helpOpen} onClose={() => setHelpOpen(false)} title="How messaging works">
         <div className="mx-auto max-w-md space-y-5 p-4 pb-10 text-sm">

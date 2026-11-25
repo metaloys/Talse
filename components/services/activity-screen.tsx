@@ -382,22 +382,24 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
             {items.length}
           </span>
         </div>
-        <div className="space-y-3">{items.map((req) => requestCard(req))}</div>
+        <div className="grid gap-3 sm:grid-cols-2">{items.map((req) => requestCard(req))}</div>
       </section>
     );
   };
 
   return (
-    <div className="mx-auto max-w-md pb-24">
-      <div className="ps-hero-grad px-4 pb-4 pt-4 ps-safe-top">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-bold text-foreground">My activity</h1>
-          {headerAction}
+    <div className="mx-auto max-w-6xl pb-24 lg:pb-14">
+      <div className="ps-hero-rich ps-safe-top">
+        <div className="px-4 pb-4 pt-4 sm:px-6">
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">My activity</h1>
+            {headerAction}
+          </div>
+          <p className="mt-1 max-w-2xl text-sm text-muted-foreground">A single timeline of work requests and status updates.</p>
         </div>
-        <p className="mt-1 text-sm text-muted-foreground">A single timeline of work requests and status updates.</p>
       </div>
 
-      <div className="space-y-5 px-4 pt-4">
+      <div className="space-y-6 px-4 pt-5 sm:px-6">
         {allRequests.length === 0 ? (
           <EmptyState
             title="No activity yet"

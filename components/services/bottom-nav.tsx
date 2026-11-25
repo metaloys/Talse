@@ -5,9 +5,10 @@ import type { TabId } from "@/lib/services/data"
 import { IconHome, IconInbox, IconSearch, IconActivity, IconUser } from "./icons"
 import { cx } from "./ui"
 
-type NavItem = { id: TabId; label: string; icon: ReactElement }
+export type NavItem = { id: TabId; label: string; icon: ReactElement }
 
-const TABS: NavItem[] = [
+/** Shared by the mobile bottom nav and the desktop top nav. */
+export const NAV_ITEMS: NavItem[] = [
   { id: "home", label: "Home", icon: <IconHome className="h-5 w-5" /> },
   { id: "search", label: "Search", icon: <IconSearch className="h-5 w-5" /> },
   { id: "activity", label: "Activity", icon: <IconActivity className="h-5 w-5" /> },
@@ -15,6 +16,20 @@ const TABS: NavItem[] = [
   { id: "profile", label: "Profile", icon: <IconUser className="h-5 w-5" /> },
 ]
 
+export function badgeFor(
+  id: TabId,
+  activityCount: number,
+  messagesUnreadCount: number,
+): number {
+  if (id === "activity") return activityCount
+  if (id === "messages") return messagesUnreadCount
+  return 0
+}
+
+/**
+ * Mobile-only bottom navigation. On desktop the app uses `TopNav` instead, so
+ * this bar is hidden from `lg` up.
+ */
 export function BottomNav({
   active,
   onChange,
@@ -27,11 +42,11 @@ export function BottomNav({
   messagesUnreadCount?: number
 }) {
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-md border-t border-border bg-card/95 backdrop-blur ps-safe-bottom">
-      <ul className="flex items-stretch">
-        {TABS.map((t) => {
+    <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur ps-safe-bottom lg:hidden">
+      <ul className="mx-auto flex max-w-md items-stretch">
+        {NAV_ITEMS.map((t) => {
           const isActive = active === t.id
-          const badgeCount = t.id === "activity" ? activityCount : t.id === "messages" ? messagesUnreadCount : 0
+          const badgeCount = badgeFor(t.id, activityCount, messagesUnreadCount)
           const showBadge = badgeCount > 0
           return (
             <li key={t.id} className="flex-1">

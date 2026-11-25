@@ -59,7 +59,9 @@ export function HomeScreen({
       {/* hero */}
       <div className="ps-hero-rich ps-safe-top">
         <div className="px-4 pb-5 pt-4 sm:px-6">
-          <div className="flex items-center justify-between gap-3">
+          {/* On mobile this row is the app header; on desktop TopNav already
+              shows the logo and name, so hide it to avoid a duplicate. */}
+          <div className="flex items-center justify-between gap-3 lg:hidden">
             <div className="flex min-w-0 items-center gap-2">
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
                 <IconLogo size={20} />

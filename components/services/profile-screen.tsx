@@ -21,12 +21,12 @@ import { ConfirmSheet } from "./feedback";
 import { Avatar, Button, Card, cx, EmptyState, Field, Pill, TextArea, TextInput, Toggle } from "./ui";
 import { ShareButton } from "./share-button";
 import {
-  CategoryIcon,
   IconCalendar,
   IconEdit,
   IconInbox,
   IconPin,
   IconPlus,
+  IconStar,
   IconTrash,
 } from "./icons";
 
@@ -128,137 +128,149 @@ export function ProfileScreen({
   const activeCount = myListings.filter((s) => s.active).length;
 
   return (
-    <div className="mx-auto max-w-md pb-24">
-      <div className="ps-hero-grad px-4 pb-5 pt-4 ps-safe-top">
-        <div className="flex items-start gap-3">
-          <Avatar name={displayName} hue={hueFromString(displayName)} size={64} />
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-bold text-foreground">{displayName}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              <Pill tone="primary">Signed in with Pi</Pill>
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-                <IconCalendar size={13} />
-                Since {formatMonthYear(joined)}
-              </span>
+    <div className="mx-auto max-w-6xl pb-24 lg:pb-14">
+      <div className="ps-hero-rich ps-safe-top">
+        <div className="px-4 pb-5 pt-4 sm:px-6">
+          <div className="flex items-start gap-4">
+            <Avatar name={displayName} hue={hueFromString(displayName)} size={72} />
+            <div className="min-w-0 flex-1">
+              <h1 className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">{displayName}</h1>
+              <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                <Pill tone="primary">Signed in with Pi</Pill>
+                <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                  <IconCalendar size={13} />
+                  Since {formatMonthYear(joined)}
+                </span>
+              </div>
             </div>
+            {!editing && (
+              <div className="flex shrink-0 items-center gap-2">
+                {headerAction}
+                <ShareButton
+                  iconOnly
+                  label="Share my profile"
+                  title={`${displayName} · Talse`}
+                  text={`Find me on Talse — hire Pi builders with Pi.`}
+                  path={currentUid ? `/providers/${currentUid}` : "/"}
+                />
+                <button
+                  onClick={startEdit}
+                  aria-label="Edit profile"
+                  className="ps-press flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground"
+                >
+                  <IconEdit size={16} />
+                </button>
+              </div>
+            )}
           </div>
+
           {!editing && (
-            <div className="flex shrink-0 items-center gap-2">
-              {headerAction}
-              <ShareButton
-                iconOnly
-                label="Share my profile"
-                title={`${displayName} · Talse`}
-                text={`Find me on Talse — hire Pi builders with Pi.`}
-                path={currentUid ? `/providers/${currentUid}` : "/"}
-              />
-              <button
-                onClick={startEdit}
-                aria-label="Edit profile"
-                className="ps-press flex h-9 w-9 items-center justify-center rounded-full border border-border bg-card text-foreground"
-              >
-                <IconEdit size={16} />
-              </button>
-            </div>
+            <>
+              {profile.location && (
+                <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+                  <IconPin size={15} />
+                  {profile.location}
+                </p>
+              )}
+              {profile.bio ? (
+                <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-relaxed text-foreground">{profile.bio}</p>
+              ) : (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Add a short bio so customers know who they&apos;re working with.
+                </p>
+              )}
+            </>
           )}
         </div>
-
-        {!editing && (
-          <>
-            {profile.location && (
-              <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
-                <IconPin size={15} />
-                {profile.location}
-              </p>
-            )}
-            {profile.bio ? (
-              <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-foreground">{profile.bio}</p>
-            ) : (
-              <p className="mt-2 text-sm text-muted-foreground">
-                Add a short bio so customers know who they&apos;re working with.
-              </p>
-            )}
-          </>
-        )}
       </div>
 
       {!editing && (
         <>
-          <div className="px-4 pt-4">
-            <button
-              type="button"
-              onClick={onOpenReviews}
-              className="ps-press flex w-full items-center justify-between rounded-2xl border border-border bg-card p-3 text-left"
-            >
-              <div>
-                <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Rating</p>
-                <p className="mt-1 text-lg font-bold text-foreground">
+          <div className="px-4 pt-5 sm:px-6">
+            <div className="grid grid-cols-3 gap-3">
+              <button
+                type="button"
+                onClick={onOpenReviews}
+                className="ps-card-hover flex flex-col rounded-2xl border border-border bg-card p-3 text-left"
+              >
+                <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Rating</span>
+                <span className="mt-1 flex items-center gap-1 text-lg font-bold text-foreground">
                   {ratingCount > 0 ? ratingAvg.toFixed(1) : "—"}
-                </p>
+                  {ratingCount > 0 && <IconStar size={14} filled className="text-primary" />}
+                </span>
+                <span className="mt-auto pt-1 text-xs text-primary">
+                  {ratingCount} review{ratingCount === 1 ? "" : "s"} · View
+                </span>
+              </button>
+
+              <div className="flex flex-col rounded-2xl border border-border bg-card p-3">
+                <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Jobs completed</span>
+                <span className="mt-1 text-lg font-bold text-foreground ps-nums">{profile.jobsCompleted ?? 0}</span>
+                <span className="mt-auto pt-1 text-xs text-muted-foreground">Delivered on Talse</span>
               </div>
-              <div className="text-right text-sm text-muted-foreground">
-                <p>{ratingCount} review{ratingCount === 1 ? "" : "s"}</p>
-                <p className="mt-1 text-xs text-primary">View all</p>
+
+              <div className="flex flex-col rounded-2xl border border-border bg-card p-3">
+                <span className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Active services</span>
+                <span className="mt-1 text-lg font-bold text-foreground ps-nums">{activeCount}</span>
+                <span className="mt-auto pt-1 text-xs text-muted-foreground">
+                  {myListings.length} total
+                </span>
               </div>
-            </button>
+            </div>
           </div>
 
-          <div className="px-4 pt-4">
-            <Card className="p-4">
+          <div className="grid gap-4 px-4 pt-4 sm:px-6 lg:grid-cols-3">
+            <Card className="p-4 lg:col-span-2">
               <div className="mb-3 flex items-center justify-between">
                 <h2 className="text-sm font-bold text-foreground">Financial summary</h2>
+                <span className="text-xs text-muted-foreground">Held safely in escrow</span>
               </div>
-              <div className="grid grid-cols-2 gap-3 text-sm">
+              <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                 <div className="rounded-xl bg-secondary/50 p-3">
                   <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Total earned</p>
-                  <p className="mt-1 font-bold text-foreground">{formatPi(profile.totalEarned ?? 0)}</p>
+                  <p className="mt-1 font-bold text-foreground ps-nums">{formatPi(profile.totalEarned ?? 0)}</p>
                 </div>
                 <div className="rounded-xl bg-secondary/50 p-3">
                   <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Total spent</p>
-                  <p className="mt-1 font-bold text-foreground">
-                    {financialLoading ? "…" : financialSummary ? formatPi(financialSummary.totalSpent) : "—"}
+                  <p className="mt-1 font-bold text-foreground ps-nums">
+                    {financialLoading ? "..." : financialSummary ? formatPi(financialSummary.totalSpent) : "—"}
                   </p>
                 </div>
                 <div className="rounded-xl bg-secondary/50 p-3">
                   <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Locked as buyer</p>
-                  <p className="mt-1 font-bold text-foreground">
-                    {financialLoading ? "…" : financialSummary ? formatPi(financialSummary.lockedAsBuyer) : "—"}
+                  <p className="mt-1 font-bold text-foreground ps-nums">
+                    {financialLoading ? "..." : financialSummary ? formatPi(financialSummary.lockedAsBuyer) : "—"}
                   </p>
                 </div>
                 <div className="rounded-xl bg-secondary/50 p-3">
                   <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Owed to you</p>
-                  <p className="mt-1 font-bold text-foreground">
-                    {financialLoading ? "…" : financialSummary ? formatPi(financialSummary.owedToYou) : "—"}
+                  <p className="mt-1 font-bold text-foreground ps-nums">
+                    {financialLoading ? "..." : financialSummary ? formatPi(financialSummary.owedToYou) : "—"}
                   </p>
-                </div>
-                <div className="col-span-2 rounded-xl bg-secondary/50 p-3">
-                  <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Jobs completed</p>
-                  <p className="mt-1 font-bold text-foreground">{profile.jobsCompleted ?? 0}</p>
                 </div>
               </div>
             </Card>
-          </div>
 
-          {!adminStatusLoading && isAdmin && (
-            <div className="px-4 pt-4">
+            {!adminStatusLoading && isAdmin && (
               <button
                 type="button"
                 onClick={onOpenAdmin}
-                className="ps-press flex w-full items-center justify-between rounded-2xl border border-border bg-card p-3 text-left"
+                className="ps-card-hover flex w-full items-center justify-between rounded-2xl border border-border bg-card p-4 text-left"
               >
                 <div>
                   <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Access</p>
-                  <p className="mt-1 text-base font-bold text-foreground">Admin</p>
+                  <p className="mt-1 text-base font-bold text-foreground">Admin console</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Manage users, orders and payouts.</p>
                 </div>
-                <span className="text-sm text-primary">Open</span>
+                <span className="text-sm font-semibold text-primary">Open</span>
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </>
       )}
 
       {editing ? (
-        <div className="space-y-4 px-4 pt-4">
+        <div className="mx-auto max-w-xl space-y-4 px-4 pt-4 sm:px-6">
           <Field label="Name" htmlFor="pf-name" counter={`${name.length}/${NAME_MAX}`}>
             <TextInput id="pf-name" maxLength={NAME_MAX} value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
           </Field>
@@ -266,7 +278,7 @@ export function ProfileScreen({
             <TextInput id="pf-loc" maxLength={LOCATION_MAX} value={location} onChange={(e) => setLocation(e.target.value)} placeholder="City, country" />
           </Field>
           <Field label="Bio (optional)" htmlFor="pf-bio" counter={`${bio.length}/${BIO_MAX}`}>
-            <TextArea id="pf-bio" rows={4} maxLength={BIO_MAX} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell people about your skills and experience…" />
+            <TextArea id="pf-bio" rows={4} maxLength={BIO_MAX} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Tell people about your skills and experience..." />
           </Field>
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={() => setEditing(false)}>
@@ -278,17 +290,16 @@ export function ProfileScreen({
           </div>
         </div>
       ) : (
-        <div className="space-y-4 px-4 pt-5">
-          <Button className="w-full" size="lg" onClick={onCreate}>
-            <IconPlus size={18} />
-            Create a service
-          </Button>
-
+        <div className="space-y-5 px-4 pt-5 sm:px-6">
           <div>
-            <div className="mb-2.5 flex items-center justify-between">
+            <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-sm font-bold text-foreground">
                 My services{myListings.length > 0 ? ` (${activeCount} active)` : ""}
               </h2>
+              <Button size="sm" onClick={onCreate}>
+                <IconPlus size={16} />
+                Create a service
+              </Button>
             </div>
             {myListings.length === 0 ? (
               <EmptyState
@@ -302,7 +313,7 @@ export function ProfileScreen({
                 }
               />
             ) : (
-              <div className="space-y-2.5">
+              <div className="grid gap-2.5 sm:grid-cols-2">
                 {myListings.map((s) => (
                   <MyServiceRow
                     key={s.id}
@@ -321,27 +332,23 @@ export function ProfileScreen({
             <p className="text-[11px] leading-relaxed text-muted-foreground">{DISCLAIMER}</p>
           </Card>
 
-          <div className="px-4 pt-2">
-            <div className="rounded-2xl border border-border bg-card p-3">
-              <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Legal</p>
-              <div className="mt-2 flex items-center justify-between gap-3 text-sm">
-                <Link href="/privacy" className="font-medium text-primary underline-offset-4 hover:underline">
-                  Privacy Policy
-                </Link>
-                <Link href="/terms" className="font-medium text-primary underline-offset-4 hover:underline">
-                  Terms of Service
-                </Link>
-              </div>
+          <div className="rounded-2xl border border-border bg-card p-3">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-muted-foreground">Legal</p>
+            <div className="mt-2 flex flex-wrap items-center justify-between gap-3 text-sm">
+              <Link href="/privacy" className="font-medium text-primary underline-offset-4 hover:underline">
+                Privacy Policy
+              </Link>
+              <Link href="/terms" className="font-medium text-primary underline-offset-4 hover:underline">
+                Terms of Service
+              </Link>
             </div>
           </div>
 
-          <div className="px-4 pt-4">
-            <Button variant="outline" className="w-full" onClick={() => void logout()}>
-              Log out
-            </Button>
-          </div>
+          <Button variant="outline" className="w-full sm:max-w-xs" onClick={() => void logout()}>
+            Log out
+          </Button>
 
-          <p className="px-4 pt-3 text-center text-[10px] tracking-wide text-muted-foreground">
+          <p className="text-center text-[10px] tracking-wide text-muted-foreground sm:text-left">
             Build {process.env.NEXT_PUBLIC_BUILD_SHA || "local"}
           </p>
         </div>
@@ -377,7 +384,7 @@ function MyServiceRow({
 }) {
   const cat = CATEGORY_MAP[service.category];
   return (
-    <Card className={cx("p-3", !service.active && "opacity-70")}>
+    <Card className={cx("ps-card-hover p-3", !service.active && "opacity-70")}>
       <div className="flex items-start gap-2">
         <button onClick={onOpen} className="ps-press min-w-0 flex-1 text-left">
           <div className="flex items-center gap-2">

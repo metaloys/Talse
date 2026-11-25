@@ -69,6 +69,27 @@ business on day one.
 - [x] **Responsive shell** — `max-w-6xl`; Browse rows go two-up, Search results
       2/3/4-up. Mobile (Pi Browser) stays the primary target.
 
+## App-wide redesign — Tier 1: shell + core tabs (done)
+
+Goal: retire the "two apps" problem — the new Home/Search sat beside old narrow
+`max-w-md` screens. Desktop strategy: responsive + a real desktop nav.
+
+- [x] **Navigation system** — shared `NAV_ITEMS`; new desktop `TopNav` (logo,
+      five tabs with live badges, bell, "Sell a service"), mobile `BottomNav`
+      unchanged but now hidden from `lg` up. Both read the same items.
+- [x] **Activity** — `max-w-6xl` shell, richer hero, request cards two-up on
+      desktop, clearer Needs action / Active / Completed sections.
+- [x] **Messages** — wide shell with a desktop two-pane layout (conversation
+      list left, sticky thread right; "select a conversation" placeholder);
+      mobile keeps list-then-thread.
+- [x] **Profile** — wide hero, a Rating / Jobs / Active-services stat row,
+      escrow financial summary, admin card beside it, and a two-up services
+      grid with hover lift.
+
+Tier 2 (service detail, provider profile, hire/escrow, create-service live
+preview) and Tier 3 (reviews, notifications, dispute/report/boost, auth,
+shared primitives) remain.
+
 ## Later / external
 
 - [ ] Mainnet A2U payout access (apply + verify).
