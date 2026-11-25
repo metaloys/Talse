@@ -62,4 +62,17 @@ if (process.env.NODE_ENV !== "production") {
     apiKeyConfigured: PI_API_KEY_CONFIGURED,
     sandbox: getPiSandboxMode(),
   });
+
+  // NEXT_PUBLIC_PI_SANDBOX is the flag the browser can see; PI_ENV is
+  // server-only. If they disagree the client and server can pick different
+  // networks, so warn instead of silently mixing Test/Mainnet context.
+  if (
+    sandboxOverride !== undefined &&
+    explicitEnv !== undefined &&
+    (sandboxOverride === "true") !== (explicitEnv === "sandbox")
+  ) {
+    console.warn(
+      `[PiEnv] NEXT_PUBLIC_PI_SANDBOX="${sandboxOverride}" disagrees with PI_ENV="${explicitEnv}". Set both consistently — the public flag wins.`,
+    );
+  }
 }
