@@ -138,6 +138,21 @@ screen.
 - [x] **Shared primitives** — new read-only `Stars` primitive in `ui.tsx` used
       by reviews and profiles, keeping rating rendering consistent app-wide.
 
+## Business model — revenue & costs (done)
+
+- [x] **`v_platform_earnings` / `_daily` / `v_platform_accounting`** — lifetime,
+      daily and per-order P&L straight from settled rows (`009`, `013`).
+- [x] **Revenue & P&L console** — actuals, daily series, CSV export, Fees & Take
+      Rate.
+- [x] **Scenario planner** — every assumption editable (Pi price, 5%/10% fee,
+      jobs, average value, boosts, refunds, growth, network fee, infra), revenue
+      split by source, break-even and payback, monthly π/USD table, CSV export.
+- [x] **`pi_usd_rate`** — persisted, audited Pi→USD reporting assumption
+      (migration `016`); USD figures are derived, never claimed as quotes.
+- [x] **`submission/REVENUE-COSTS.md`** — written report: assumptions, per-unit
+      economics, 12-month base case, revenue by source, costs, break-even and
+      sensitivity, with disclosures.
+
 ## Later / external
 
 - [ ] Mainnet A2U payout access (apply + verify).

@@ -213,7 +213,7 @@ export function ConfigurationScreen({ ctx }: { ctx: ScreenCtx }) {
     try {
       const meta = data?.meta?.[key];
       let value: unknown = valueOf(key);
-      if (meta?.kind === "percent" || meta?.kind === "pi" || meta?.kind === "number") value = Number(value);
+      if (meta?.kind === "percent" || meta?.kind === "pi" || meta?.kind === "usd" || meta?.kind === "number") value = Number(value);
       await backendApi.admin.updateConfig(key, value, ctx.token);
       ctx.notify(`${meta?.label ?? key} updated.`, "success");
       setDraft((d) => {
@@ -265,7 +265,7 @@ export function ConfigurationScreen({ ctx }: { ctx: ScreenCtx }) {
                 ) : (
                   <TextInput
                     type="number"
-                    step={m.kind === "percent" ? 0.01 : 1}
+                    step={m.kind === "percent" || m.kind === "usd" ? 0.01 : 1}
                     value={String(valueOf(key) ?? "")}
                     onChange={(e) => setDraft({ ...draft, [key]: e.target.value })}
                   />

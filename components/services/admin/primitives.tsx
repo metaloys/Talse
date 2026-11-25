@@ -27,6 +27,17 @@ export function fmtPi(n: unknown): string {
   return `${v.toLocaleString(undefined, { minimumFractionDigits: v % 1 === 0 ? 0 : 2, maximumFractionDigits: 2 })} π`;
 }
 
+export function fmtUsd(n: unknown): string {
+  const v = Number(n) || 0;
+  const abs = Math.abs(v);
+  const digits = abs >= 1000 || abs === 0 ? 0 : 2;
+  const body = abs.toLocaleString(undefined, {
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
+  });
+  return `${v < 0 ? "-" : ""}$${body}`;
+}
+
 export function fmtNum(n: unknown): string {
   return (Number(n) || 0).toLocaleString();
 }

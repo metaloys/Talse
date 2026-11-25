@@ -19,6 +19,7 @@ import {
   useAsync,
 } from "./primitives";
 import type { ScreenCtx } from "./types";
+import { ScenarioPlanner } from "./scenario-planner";
 
 async function downloadAccountingCsv(range: string, token: string) {
   const res = await fetch(`/api/admin/accounting?range=${range}&format=csv`, { headers: { Authorization: `Bearer ${token}` } });
@@ -91,6 +92,8 @@ export function RevenueScreen({ ctx }: { ctx: ScreenCtx }) {
           </div>
         </div>
       </Card>
+
+      <ScenarioPlanner defaults={data?.assumptions} />
 
       <DataTable
         columns={[

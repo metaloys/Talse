@@ -249,8 +249,14 @@ export const backendApi = {
       request<{ range: string; totals: any; byName: Record<string, number>; series: any[]; funnel: any[]; topServices: any[] }>(
         `/api/admin/analytics?range=${range}`, { accessToken }),
     accounting: (range: string, accessToken: string) =>
-      request<{ range: string; lifetime: any; rangeTotals: any; series: any[]; takeRate: number }>(
-        `/api/admin/accounting?range=${range}`, { accessToken }),
+      request<{
+        range: string;
+        lifetime: any;
+        rangeTotals: any;
+        series: any[];
+        takeRate: number;
+        assumptions: { piUsdRate: number; feePercent: number; boostPricePi: number; networkFeePi: number };
+      }>(`/api/admin/accounting?range=${range}`, { accessToken }),
     live: (accessToken: string) =>
       request<{ items: any[]; generatedAt: string }>(`/api/admin/live`, { accessToken }),
     getConfig: (accessToken: string) =>

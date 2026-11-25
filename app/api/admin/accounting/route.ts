@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { authorizeAdmin, adminError } from "@/lib/admin-route";
+import { getPlatformSettings } from "@/lib/platform-settings";
 
 // GET /api/admin/accounting?range=7|30|90|all[&format=csv]
 //
@@ -45,9 +46,10 @@ export async function GET(req: NextRequest) {
       .order("day", { ascending: true });
     if (since) seriesQuery = seriesQuery.gte("day", since);
 
-    const [lifetimeRes, seriesRes] = await Promise.all([
+    const [lifetimeRes, seriesRes, settings] = await Promise.all([
       supabaseAdmin.from("v_platform_earnings").select("*").single(),
       seriesQuery,
+      getPlatformSettings(),
     ]);
 
     if (lifetimeRes.error || seriesRes.error) {
@@ -103,7 +105,21 @@ export async function GET(req: NextRequest) {
 
     const takeRate = lifetime.grossVolume > 0 ? lifetime.transactionFees / lifetime.grossVolume : 0;
 
-    return NextResponse.json({ range, lifetime, rangeTotals: totals, series, takeRate });
+    return NextResponse.json({
+      range,
+      lifetime,
+      rangeTotals: totals,
+      series,
+      takeRate,
+      // Defaults for the scenario planner, so the planner starts from the
+      // platform's real fee, boost price, network fee and Pi assumption.
+      assumptions: {
+        piUsdRate: settings.pi_usd_rate,
+        feePercent: settings.platform_fee_percent,
+        boostPricePi: settings.boost_price_pi,
+        networkFeePi: settings.network_fee_pi,
+      },
+    });
   } catch (err) {
     return adminError(err, "accounting");
   }

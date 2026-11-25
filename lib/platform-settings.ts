@@ -24,6 +24,8 @@ export type PlatformSettings = {
   feature_offers_enabled: boolean;
   feature_boosts_enabled: boolean;
   feature_analytics_enabled: boolean;
+  /** USD per 1 Pi, used only for revenue reporting. An assumption, not a quote. */
+  pi_usd_rate: number;
 };
 
 export const SETTING_KEYS = [
@@ -38,6 +40,7 @@ export const SETTING_KEYS = [
   "feature_offers_enabled",
   "feature_boosts_enabled",
   "feature_analytics_enabled",
+  "pi_usd_rate",
 ] as const;
 
 export type SettingKey = (typeof SETTING_KEYS)[number];
@@ -54,12 +57,15 @@ export const PLATFORM_SETTING_DEFAULTS: PlatformSettings = {
   feature_offers_enabled: true,
   feature_boosts_enabled: true,
   feature_analytics_enabled: true,
+  // Placeholder reporting assumption. Update to the current rate from
+  // Configuration; projections recompute from whatever is stored here.
+  pi_usd_rate: 0.3,
 };
 
 /** Human-facing metadata for the Configuration screen. */
 export const SETTING_META: Record<
   SettingKey,
-  { label: string; hint: string; kind: "percent" | "pi" | "number" | "bool" }
+  { label: string; hint: string; kind: "percent" | "pi" | "usd" | "number" | "bool" }
 > = {
   platform_fee_percent: { label: "Platform fee", hint: "Retained from each released job", kind: "percent" },
   network_fee_pi: { label: "Network fee absorbed", hint: "Pi absorbed per outgoing payout", kind: "pi" },
@@ -72,6 +78,11 @@ export const SETTING_META: Record<
   feature_offers_enabled: { label: "Offers", hint: "Counter-offers on hire requests", kind: "bool" },
   feature_boosts_enabled: { label: "Boosts", hint: "Featured listing boosts", kind: "bool" },
   feature_analytics_enabled: { label: "Analytics", hint: "Product event collection", kind: "bool" },
+  pi_usd_rate: {
+    label: "Pi price (USD)",
+    hint: "Reporting assumption for USD projections — not a live quote",
+    kind: "usd",
+  },
 };
 
 const TTL_MS = 15_000;
