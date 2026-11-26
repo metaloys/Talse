@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import { STATUS_META, formatPi, timeAgo, type HireRequest } from "@/lib/services/data";
+import { useMemo, useState, useEffect, useRef } from "react";
+import { STATUS_META, formatPi, timeAgo, type HireRequest, type RequestStatus } from "@/lib/services/data";
 import { backendApi } from "@/lib/backend-api";
 import { usePiAuth } from "@/contexts/pi-auth-context";
 import { useServices } from "@/contexts/services-context";
@@ -20,6 +20,35 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
   const [offerFor, setOfferFor] = useState<string | null>(null);
   const [offerAmount, setOfferAmount] = useState("");
   const [offerBusy, setOfferBusy] = useState(false);
+  // One status change at a time. The ref is set synchronously so a second tap in
+  // the same tick is ignored (React state would still be stale); the id drives
+  // the disabled state on each card's buttons.
+  const statusBusyRef = useRef(false);
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+
+  // Fire a status change exactly once. A double-tap on Accept used to send a
+  // second PATCH, which the server correctly rejected as accepted -> accepted.
+  const changeStatus = (
+    id: string,
+    status: RequestStatus,
+    successMessage: string,
+    failureMessage: string,
+    tone: "success" | "info" = "success",
+  ) => {
+    if (statusBusyRef.current) return;
+    statusBusyRef.current = true;
+    setStatusBusyId(id);
+    void setRequestStatus(id, status)
+      .then(() => pushToast(successMessage, tone))
+      .catch((err) => {
+        console.error(`[Activity] ${status} failed:`, err);
+        pushToast(err instanceof Error ? err.message : failureMessage, "danger");
+      })
+      .finally(() => {
+        statusBusyRef.current = false;
+        setStatusBusyId(null);
+      });
+  };
 
   useEffect(() => {
     if (!initialOpenRequestId) return;
@@ -178,14 +207,10 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
               variant="success"
               size="sm"
               className="flex-1"
-              onClick={() => {
-                void setRequestStatus(req.id, "accepted")
-                  .then(() => pushToast("Request accepted", "success"))
-                  .catch((err) => {
-                    console.error("[Activity] Accept failed:", err);
-                    pushToast("Could not accept this request. Please try again.", "danger");
-                  });
-              }}
+              disabled={statusBusyId === req.id}
+              onClick={() =>
+                changeStatus(req.id, "accepted", "Request accepted", "Could not accept this request. Please try again.")
+              }
             >
               Accept
             </Button>
@@ -193,14 +218,10 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
               variant="outline"
               size="sm"
               className="flex-1"
-              onClick={() => {
-                void setRequestStatus(req.id, "declined")
-                  .then(() => pushToast("Request declined", "info"))
-                  .catch((err) => {
-                    console.error("[Activity] Decline failed:", err);
-                    pushToast("Could not decline this request. Please try again.", "danger");
-                  });
-              }}
+              disabled={statusBusyId === req.id}
+              onClick={() =>
+                changeStatus(req.id, "declined", "Request declined", "Could not decline this request. Please try again.", "info")
+              }
             >
               Decline
             </Button>
@@ -213,17 +234,13 @@ export function ActivityScreen({ onBrowse, initialOpenRequestId, onOpenMessages,
               variant="outline"
               size="sm"
               className="w-full"
+              disabled={statusBusyId === req.id}
               onClick={() => {
                 if (req.status !== "pending") {
                   pushToast("Only pending requests can be cancelled.", "warning");
                   return;
                 }
-                void setRequestStatus(req.id, "declined")
-                  .then(() => pushToast("Request cancelled", "info"))
-                  .catch((err) => {
-                    console.error("[Activity] Cancel failed:", err);
-                    pushToast("Could not cancel this request. Please try again.", "danger");
-                  });
+                changeStatus(req.id, "declined", "Request cancelled", "Could not cancel this request. Please try again.", "info");
               }}
             >
               Cancel

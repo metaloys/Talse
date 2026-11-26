@@ -67,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
     const { data: existing, error: fetchErr } = await supabaseAdmin
       .from("hire_requests")
-      .select("buyer_uid, provider_uid, status")
+      .select("*")
       .eq("id", id)
       .single();
     if (fetchErr || !existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -81,6 +81,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (!isBuyer && !isProvider) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     if (rule.by === "buyer" && !isBuyer) return NextResponse.json({ error: "Only the buyer may do this" }, { status: 403 });
     if (rule.by === "provider" && !isProvider) return NextResponse.json({ error: "Only the provider may do this" }, { status: 403 });
+    // Idempotent no-op: asking for the state a row is already in (a double-tap on
+    // Accept, a retry after a dropped response) is not a conflict. Returning the
+    // row keeps the call safe to repeat — and, for "disputed", avoids re-running
+    // the side effects below that would reset an in-review dispute.
+    if (existing.status === nextStatus) {
+      return NextResponse.json({ request: existing });
+    }
     if (!rule.from.includes(existing.status)) {
       return NextResponse.json(
         { error: `Cannot move from '${existing.status}' to '${nextStatus}'` },

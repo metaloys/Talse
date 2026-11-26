@@ -866,10 +866,8 @@ export function ServicesProvider({ children }: { children: ReactNode }) {
         service_id: request?.service_id ?? request?.serviceId,
         price: request?.price ?? request?.service_price,
       });
-      pushToast("Request accepted", "success");
     } else if (status === "declined") {
       track("request_declined", { request_id: id });
-      pushToast("Request declined", "warning");
     }
   };
 
