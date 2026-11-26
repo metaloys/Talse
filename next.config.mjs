@@ -1,5 +1,14 @@
 /** @type {import('next').NextConfig} */
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 const nextConfig = {
+  // Pin tracing/output root to this project. Next sometimes infers the wrong
+  // workspace root (e.g. a stray package-lock.json in the user's home folder),
+  // which makes Watchpack scan the whole profile and dev requests hang.
+  outputFileTracingRoot: __dirname,
   images: {
     unoptimized: true,
   },
