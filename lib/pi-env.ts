@@ -53,6 +53,36 @@ export function getPiApiBase(): string {
 export const PI_ENV_NAME = getPiSandboxMode() ? "sandbox" : "production";
 export const PI_API_KEY_CONFIGURED = Boolean(process.env.PI_API_KEY);
 
+// --- Settlement mode (escrow vs p2p) -----------------------------------------
+// How a hire payment settles. "escrow" (default) keeps the current custodial
+// flow: the buyer funds a Talse-managed escrow and the platform releases funds
+// to the provider via A2U (Testnet today). "p2p" is the Production (Mainnet)
+// strategy: the buyer pays the provider directly (Pioneer-to-Pioneer, allowed
+// on Mainnet) and the platform takes a U2A fee. P2P is only honoured on a
+// non-sandbox (Production) build — on Sandbox/Testnet it would strand funds.
+export type PiSettlementMode = "escrow" | "p2p";
+
+export function getSettlementMode(): PiSettlementMode {
+  if (getPiSandboxMode()) return "escrow";
+  const mode = process.env.PI_SETTLEMENT_MODE ?? "escrow";
+  return mode === "p2p" ? "p2p" : "escrow";
+}
+
+/**
+ * Single resolved view of the network this build runs on. Server helpers should
+ * read this instead of re-deriving envs, so Testnet and Mainnet deployments
+ * cannot silently drift apart. Values are resolved once at module load.
+ */
+export const PI_NETWORK = {
+  name: getPiSandboxMode() ? "testnet" : "mainnet",
+  sandbox: getPiSandboxMode(),
+  settlementMode: getSettlementMode(),
+  platformApiBase: PI_PLATFORM_API_BASE,
+  passphrase: PI_NETWORK_PASSPHRASE,
+  horizonUrl: PI_HORIZON_URL,
+  rpcUrl: PI_RPC_URL,
+} as const;
+
 if (process.env.NODE_ENV !== "production") {
   // Safe diagnostic log: environment + base URL only, never the API key.
   console.info("[PiEnv]", {

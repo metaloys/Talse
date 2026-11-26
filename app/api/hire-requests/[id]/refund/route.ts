@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-server";
 import { verifyPiToken, PiAuthError } from "@/lib/pi-verify";
-import { payoutHireRequest, PayoutNotConfiguredError, PayoutWalletBusyError, PayoutWalletLeaseLostError } from "@/lib/dispute-resolution";
+import { PayoutNotConfiguredError, PayoutWalletBusyError, PayoutWalletLeaseLostError } from "@/lib/dispute-resolution";
+import { getSettlement, SettlementNotSupportedError } from "@/lib/settlement";
 
 /**
  * Self-service refund path. The real rule is intentionally narrow:
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     if (hr.status === "delivered" && me.uid === hr.provider_uid) {
-      const data = await payoutHireRequest({ hireRequestId: id, favor: "buyer" });
+      const data = await getSettlement().release({ hireRequestId: id, favor: "buyer" });
       return NextResponse.json({ request: data });
     }
 
@@ -44,10 +45,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       );
     }
 
-    const data = await payoutHireRequest({ hireRequestId: id, favor: "buyer" });
+    const data = await getSettlement().release({ hireRequestId: id, favor: "buyer" });
     return NextResponse.json({ request: data });
   } catch (err) {
     if (err instanceof PiAuthError) return NextResponse.json({ error: err.message }, { status: err.status });
+    if (err instanceof SettlementNotSupportedError) return NextResponse.json({ error: err.message }, { status: 409 });
     if (err instanceof PayoutNotConfiguredError) return NextResponse.json({ error: err.message }, { status: err.status });
     if (err instanceof PayoutWalletBusyError || err instanceof PayoutWalletLeaseLostError)
       return NextResponse.json({ error: err.message }, { status: err.status });

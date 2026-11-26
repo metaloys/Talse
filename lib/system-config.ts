@@ -1,4 +1,4 @@
-import { getPiSandboxMode } from "@/lib/pi-env";
+import { getPiSandboxMode, getSettlementMode } from "@/lib/pi-env";
 
 // The Sandbox/Production decision has a single source of truth in lib/pi-env.ts
 // (getPiSandboxMode). A second copy here is exactly what let the client and the
@@ -15,6 +15,8 @@ export const PI_NETWORK_CONFIG = {
   BACKEND_URL:
     process.env.NEXT_PUBLIC_PI_APPSTUDIO_BACKEND ?? "https://backend.appstudio-u7cm9zhmha0ruwv8.piappengine.com",
   SANDBOX,
+  // "escrow" (default) or "p2p" — how hire payments settle on this build.
+  SETTLEMENT_MODE: getSettlementMode(),
   PI_API_BASE: SANDBOX
     ? process.env.PI_SANDBOX_API_BASE ?? "https://api.testnet.minepi.com/v2"
     : process.env.PI_PRODUCTION_API_BASE ?? "https://api.minepi.com/v2",
